@@ -1,0 +1,6 @@
+{
+  "name": "ACC One Follow Up",
+  "description": "Sistem internal ACC untuk mengelola follow up customer pembiayaan via WhatsApp, mencatat riwayat, dan melihat rekap sales maupun admin.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
