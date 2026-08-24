@@ -1,0 +1,61 @@
+import { pgTable, text, timestamp, integer, boolean, varchar } from "drizzle-orm/pg-core";
+
+export const customers = pgTable("customers", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  phone: text("phone").notNull(),
+  city: text("city").default(""),
+  company: text("company").default(""),
+  product: text("product").default(""),
+  unit: text("unit").default(""),
+  segment: text("segment").default(""),
+  contractNumber: text("contract_number").default(""),
+  region: text("region").default(""),
+  value: integer("value").default(0),
+  source: text("source").default(""),
+  status: text("status").default("Prospect"),
+  owner: text("owner").default(""),
+  note: text("note").default(""),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const followUps = pgTable("follow_ups", {
+  id: text("id").primaryKey(),
+  customerId: text("customer_id").notNull(),
+  channel: text("channel").default("WhatsApp"),
+  outcome: text("outcome").default(""),
+  interest: text("interest").default(""),
+  reason: text("reason").default(""),
+  nextAction: text("next_action").default(""),
+  by: text("by").default(""),
+  at: timestamp("at").defaultNow(),
+});
+
+export const templates = pgTable("templates", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  body: text("body").notNull(),
+});
+
+export const accounts = pgTable("accounts", {
+  id: text("id").primaryKey(),
+  name: text("name").notNull(),
+  email: text("email").notNull(),
+  role: text("role").default("sales"),
+  active: boolean("active").default(true),
+});
+
+export const notes = pgTable("notes", {
+  id: text("id").primaryKey(),
+  title: text("title").notNull(),
+  body: text("body").notNull(),
+  by: text("by").default(""),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const accAppState = pgTable("acc_app_state", {
+  key: varchar("key", { length: 50 }).primaryKey(),
+  value: text("value").notNull(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});

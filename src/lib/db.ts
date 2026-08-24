@@ -144,7 +144,76 @@ async function getPgClient(): Promise<Client | null> {
 async function initPgTables() {
   if (!pgClient) return;
   try {
-    // Create KV store table for overall app state
+    // Create customers table
+    await pgClient.query(`
+      CREATE TABLE IF NOT EXISTS customers (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        phone TEXT NOT NULL,
+        city TEXT DEFAULT '',
+        company TEXT DEFAULT '',
+        product TEXT DEFAULT '',
+        unit TEXT DEFAULT '',
+        segment TEXT DEFAULT '',
+        contract_number TEXT DEFAULT '',
+        region TEXT DEFAULT '',
+        value INTEGER DEFAULT 0,
+        source TEXT DEFAULT '',
+        status TEXT DEFAULT 'Prospect',
+        owner TEXT DEFAULT '',
+        note TEXT DEFAULT '',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Create follow_ups table
+    await pgClient.query(`
+      CREATE TABLE IF NOT EXISTS follow_ups (
+        id TEXT PRIMARY KEY,
+        customer_id TEXT NOT NULL,
+        channel TEXT DEFAULT 'WhatsApp',
+        outcome TEXT DEFAULT '',
+        interest TEXT DEFAULT '',
+        reason TEXT DEFAULT '',
+        next_action TEXT DEFAULT '',
+        by TEXT DEFAULT '',
+        at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Create templates table
+    await pgClient.query(`
+      CREATE TABLE IF NOT EXISTS templates (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        body TEXT NOT NULL
+      );
+    `);
+
+    // Create accounts table
+    await pgClient.query(`
+      CREATE TABLE IF NOT EXISTS accounts (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        email TEXT NOT NULL,
+        role TEXT DEFAULT 'sales',
+        active BOOLEAN DEFAULT true
+      );
+    `);
+
+    // Create notes table
+    await pgClient.query(`
+      CREATE TABLE IF NOT EXISTS notes (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        body TEXT NOT NULL,
+        by TEXT DEFAULT '',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+    `);
+
+    // Create acc_app_state table
     await pgClient.query(`
       CREATE TABLE IF NOT EXISTS acc_app_state (
         key VARCHAR(50) PRIMARY KEY,
