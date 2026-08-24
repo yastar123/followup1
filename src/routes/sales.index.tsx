@@ -1,16 +1,6 @@
 import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
-import {
-  Database,
-  PhoneOutgoing,
-  PhoneOff,
-  CircleHelp,
-  ThumbsDown,
-  MapPin,
-  CalendarCheck,
-  TrendingUp,
-  PhoneCall,
-} from "lucide-react";
+import { Database, PhoneOutgoing, PhoneOff, CircleHelp, ThumbsDown, PhoneCall } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { StatCard } from "@/components/StatCard";
 import { ProgressBanner } from "@/components/ProgressBanner";
@@ -99,8 +89,6 @@ function SalesDashboard() {
   }).length;
 
   const tidakMinat = activeCustomers.filter((c) => c.status === "Tidak Tertarik").length;
-  const surveyVisit = activeCustomers.filter((c) => c.status === "Proses").length;
-  const booking = activeCustomers.filter((c) => c.status === "Tertarik").length;
   const closing = activeCustomers.filter((c) => c.status === "Closing").length;
 
   return (
@@ -151,19 +139,6 @@ function SalesDashboard() {
           icon={ThumbsDown}
           hint="Customer menolak"
         />
-        <StatCard
-          label="Survey/Visit"
-          value={String(surveyVisit)}
-          icon={MapPin}
-          hint="Status proses/survey"
-        />
-        <StatCard
-          label="Booking"
-          value={String(booking)}
-          icon={CalendarCheck}
-          hint="Customer tertarik"
-        />
-        <StatCard label="Closing" value={String(closing)} icon={TrendingUp} hint="Deal tercapai" />
       </div>
 
       <div className="mt-6">
