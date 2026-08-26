@@ -8,6 +8,7 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
+    "serve": "node scripts/serve.mjs",
     "lint": "eslint .",
     "format": "prettier --write .",
     "dbpush": "tsx src/scripts/dbpush.ts",
