@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { Database, PhoneOutgoing, PhoneOff, CircleHelp, ThumbsDown, PhoneCall } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { StatCard } from "@/components/StatCard";
@@ -53,6 +53,7 @@ function isInPeriod(date: string, period: Period, range?: DateRange) {
 }
 
 function SalesDashboard() {
+  const navigate = useNavigate();
   const [period, setPeriod] = useState<Period>("all");
   const [range, setRange] = useState<DateRange | undefined>(undefined);
   const { user, customers, followUps } = useStore();
@@ -88,7 +89,13 @@ function SalesDashboard() {
     return f ? !connectedOutcomes.has(f.outcome) : false;
   }).length;
 
-  const tidakMinat = activeCustomers.filter((c) => c.status === "Tidak Tertarik").length;
+  const tidakMinat = activeCustomers.filter(
+    (c) =>
+      c.status === "Tidak Tertarik" ||
+      latestFollowUpInPeriodByCustomer.get(c.id)?.interest === "Tidak Tertarik" ||
+      latestFollowUpInPeriodByCustomer.get(c.id)?.interest === "Belum minat" ||
+      latestFollowUpInPeriodByCustomer.get(c.id)?.interest === "Langsung dimatikan",
+  ).length;
   const closing = activeCustomers.filter((c) => c.status === "Closing").length;
 
   return (
@@ -108,36 +115,44 @@ function SalesDashboard() {
           value={String(totalDatabase)}
           icon={Database}
           hint="Customer aktif di periode ini"
+          onClick={() => navigate({ to: "/sales/customers", search: { filter: "all" } })}
         />
         <StatCard
           label="Sudah Follow Up"
           value={String(sudahFollowUp)}
           icon={PhoneOutgoing}
           hint="Sudah ada riwayat follow up"
+          onClick={() => navigate({ to: "/sales/customers", search: { filter: "sudah" } })}
         />
         <StatCard
           label="Belum Follow Up"
           value={String(belumFollowUp)}
           icon={CircleHelp}
           hint="Belum dihubungi sales"
+          onClick={() => navigate({ to: "/sales/customers", search: { filter: "belum" } })}
         />
         <StatCard
           label="Terhubung"
           value={String(terhubung)}
           icon={PhoneCall}
           hint="Chat/telepon dijawab"
+          onClick={() => navigate({ to: "/sales/customers", search: { filter: "terhubung" } })}
         />
         <StatCard
           label="Tidak terhubung"
           value={String(tidakTerhubung)}
           icon={PhoneOff}
           hint="Chat/telepon tidak dijawab"
+          onClick={() =>
+            navigate({ to: "/sales/customers", search: { filter: "tidak_terhubung" } })
+          }
         />
         <StatCard
           label="Tidak Minat"
           value={String(tidakMinat)}
           icon={ThumbsDown}
           hint="Customer menolak"
+          onClick={() => navigate({ to: "/sales/customers", search: { filter: "tidak_minat" } })}
         />
       </div>
 

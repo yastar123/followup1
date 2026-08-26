@@ -1,10 +1,12 @@
-import { createFileRoute, Link } from "@tanstack/react-router";
+import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useEffect, useMemo, useState } from "react";
+import { ChevronRight, PhoneCall } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Pager } from "@/components/Pager";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Input } from "@/components/ui/input";
-import { useStore, rupiah } from "@/lib/store";
+import { Button } from "@/components/ui/button";
+import { useStore } from "@/lib/store";
 
 const PAGE_SIZE = 10;
 
@@ -28,6 +30,7 @@ export const Route = createFileRoute("/sales/kolam-minat")({
 });
 
 function InterestPoolPage() {
+  const navigate = useNavigate();
   const { followUps, customers } = useStore();
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
@@ -66,75 +69,97 @@ function InterestPoolPage() {
         <Input
           value={q}
           onChange={(e) => setQ(e.target.value)}
-          placeholder="Cari nama, perusahaan, prospek…"
+          placeholder="Cari nama customer, prospek…"
           className="w-full sm:w-72"
         />
       }
     >
       <div className="surface-card overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[860px] text-left text-sm [&_td]:whitespace-nowrap [&_th]:whitespace-nowrap">
-            <thead className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground">
+          <table className="w-full min-w-[600px] text-left text-sm [&_td]:whitespace-normal [&_th]:whitespace-nowrap">
+            <thead className="border-b border-border text-xs uppercase tracking-wide text-muted-foreground bg-muted/30">
               <tr>
-                <th className="px-4 py-3 font-medium">Customer</th>
-                <th className="px-4 py-3 font-medium">Perusahaan</th>
-                <th className="px-4 py-3 font-medium">Unit / Nilai</th>
-                <th className="px-4 py-3 font-medium">Hasil</th>
-                <th className="px-4 py-3 font-medium">Prospek</th>
-                <th className="px-4 py-3 font-medium">Dicatat</th>
+                <th className="px-5 py-3.5 font-semibold">Customer</th>
+                <th className="px-5 py-3.5 font-semibold">Prospek / Catatan Minat</th>
+                <th className="px-5 py-3.5 text-right font-semibold">Aksi</th>
               </tr>
             </thead>
-            <tbody>
-              {pageItems.map(({ f, c }) => (
-                <tr key={f.id} className="border-b border-border/60 last:border-0 align-top">
-                  <td className="px-4 py-3">
-                    {c ? (
-                      <Link
-                        to="/sales/customers/$id"
-                        params={{ id: c.id }}
-                        className="font-medium text-foreground hover:text-primary"
-                      >
-                        {c.name}
-                      </Link>
-                    ) : (
-                      <span className="font-medium text-foreground">Customer</span>
-                    )}
-                    <p className="text-xs text-muted-foreground">{c?.phone ?? "-"}</p>
-                  </td>
-                  <td className="px-4 py-3">
-                    <p className="text-foreground">{c?.company ?? "-"}</p>
-                    <p className="text-xs text-muted-foreground">{c?.city ?? "-"}</p>
-                  </td>
-                  <td className="px-4 py-3">
-                    <p className="text-foreground">{c?.unit ?? "-"}</p>
-                    <p className="text-xs text-muted-foreground">{c ? rupiah(c.value) : "-"}</p>
-                  </td>
-                  <td className="px-4 py-3">
-                    <p className="text-xs text-muted-foreground">{f.channel}</p>
-                    <p className="text-foreground">{f.interest}</p>
-                    {c && (
-                      <div className="mt-1">
-                        <StatusBadge status={c.status} />
+            <tbody className="divide-y divide-border/60">
+              {pageItems.map(({ f, c }) => {
+                const customerId = c?.id || f.customerId;
+                return (
+                  <tr
+                    key={f.id}
+                    onClick={() =>
+                      navigate({
+                        to: "/sales/customers/$id",
+                        params: { id: customerId },
+                      })
+                    }
+                    className="group cursor-pointer transition-colors hover:bg-accent/40"
+                  >
+                    <td className="px-5 py-4 align-top">
+                      <div className="flex items-center gap-2">
+                        {c ? (
+                          <Link
+                            to="/sales/customers/$id"
+                            params={{ id: c.id }}
+                            onClick={(e) => e.stopPropagation()}
+                            className="font-semibold text-base text-foreground group-hover:text-primary transition-colors"
+                          >
+                            {c.name}
+                          </Link>
+                        ) : (
+                          <span className="font-semibold text-base text-foreground">Customer</span>
+                        )}
+                        {c?.status && <StatusBadge status={c.status} />}
                       </div>
-                    )}
-                  </td>
-                  <td className="max-w-xs px-4 py-3 text-foreground">{f.reason}</td>
-                  <td className="px-4 py-3 text-xs text-muted-foreground">
-                    {new Date(f.at).toLocaleString("id-ID", {
-                      day: "numeric",
-                      month: "short",
-                      hour: "2-digit",
-                      minute: "2-digit",
-                    })}
-                    <br />
-                    {f.by}
-                  </td>
-                </tr>
-              ))}
+                      <p className="mt-1 text-xs text-muted-foreground flex items-center gap-1.5">
+                        <PhoneCall className="size-3 text-primary shrink-0" />
+                        <span>+{c?.phone ?? "-"}</span>
+                        {c?.city && <span>· {c.city}</span>}
+                      </p>
+                    </td>
+                    <td className="px-5 py-4 align-top">
+                      <div className="inline-block rounded-md bg-primary/10 px-2 py-0.5 text-xs font-semibold text-primary mb-1">
+                        {f.interest || "Minat Prospek"}
+                      </div>
+                      <p className="text-sm text-foreground font-medium">{f.reason}</p>
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {new Date(f.at).toLocaleString("id-ID", {
+                          day: "numeric",
+                          month: "short",
+                          year: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}{" "}
+                        · oleh {f.by}
+                      </p>
+                    </td>
+                    <td className="px-5 py-4 align-middle text-right">
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        className="gap-1 text-xs font-medium text-primary group-hover:bg-primary group-hover:text-primary-foreground transition-all"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate({
+                            to: "/sales/customers/$id",
+                            params: { id: customerId },
+                          });
+                        }}
+                      >
+                        <span>Lihat Follow Up</span>
+                        <ChevronRight className="size-4" />
+                      </Button>
+                    </td>
+                  </tr>
+                );
+              })}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-4 py-10 text-center text-sm text-muted-foreground">
-                    Belum ada prospek. Isi kolom “Prospek” saat follow up customer.
+                  <td colSpan={3} className="px-5 py-12 text-center text-sm text-muted-foreground">
+                    Belum ada prospek tercatat di kolam minat.
                   </td>
                 </tr>
               )}
@@ -142,7 +167,7 @@ function InterestPoolPage() {
           </table>
         </div>
 
-        <div className="px-4 pb-4">
+        <div className="px-4 pb-4 pt-2">
           <Pager
             page={page}
             totalPages={totalPages}

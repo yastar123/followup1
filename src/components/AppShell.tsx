@@ -9,6 +9,7 @@ import {
   NotebookPen,
   Droplets,
   LogOut,
+  ShieldCheck,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useStore } from "@/lib/store";
@@ -43,6 +44,7 @@ const adminNav = [
   { to: "/admin/rekap", label: "Rekap Customer", short: "Rekap", icon: ClipboardList },
   { to: "/admin/pesan", label: "Template Pesan", short: "Pesan", icon: MessageSquareText },
   { to: "/admin/akun", label: "Buat Akun", short: "Akun", icon: UserCog },
+  { to: "/admin/akses-sales", label: "Akses Halaman Sales", short: "Akses", icon: ShieldCheck },
 ];
 
 export function AppShell({
@@ -58,7 +60,7 @@ export function AppShell({
   actions?: ReactNode;
   children: ReactNode;
 }) {
-  const { user, setRole, dbStatus } = useStore();
+  const { user, setRole, dbStatus, impersonating, stopImpersonate } = useStore();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const nav = role === "sales" ? salesNav : adminNav;
 
@@ -123,6 +125,23 @@ export function AppShell({
         </Sidebar>
 
         <SidebarInset className="flex min-w-0 flex-1 flex-col">
+          {impersonating && (
+            <div className="bg-amber-500 text-amber-950 px-4 py-2.5 text-xs sm:text-sm font-semibold flex items-center justify-between gap-4 shadow-md border-b border-amber-600/20">
+              <div className="flex items-center gap-2">
+                <span className="inline-flex h-2.5 w-2.5 rounded-full bg-amber-950 animate-pulse shrink-0" />
+                <span>
+                  Mode Akses Sales: Anda sedang login sebagai{" "}
+                  <strong className="font-bold">{user}</strong>
+                </span>
+              </div>
+              <button
+                onClick={() => stopImpersonate()}
+                className="bg-amber-950 hover:bg-amber-900 text-amber-50 px-3 py-1 rounded-md text-xs font-semibold transition-colors shrink-0"
+              >
+                Kembali ke Admin
+              </button>
+            </div>
+          )}
           <header className="sticky top-0 z-20 border-b border-border bg-background/85 backdrop-blur">
             <div className="flex flex-col gap-3 px-4 py-4 md:flex-row md:flex-wrap md:items-end md:justify-between md:gap-4 md:px-8 md:py-5">
               <div className="flex min-w-0 items-start gap-2 md:gap-3">

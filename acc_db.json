@@ -1,5 +1,5 @@
 {
-  "role": null,
+  "role": "sales",
   "user": "Sales · Rio",
   "customers": [
     {
@@ -216,5 +216,6 @@
       "updatedAt": "2026-08-10T02:00:00.000Z"
     }
   ],
-  "sheetUrl": "https://docs.google.com/spreadsheets/d/1ACCLeadsDemo/edit"
+  "sheetUrl": "https://docs.google.com/spreadsheets/d/1ACCLeadsDemo/edit",
+  "impersonating": false
 }

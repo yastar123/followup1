@@ -26,6 +26,11 @@ function HistoryPage() {
   const { followUps, customers } = useStore();
   const [page, setPage] = useState(1);
   const totalPages = Math.max(1, Math.ceil(followUps.length / PAGE_SIZE));
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
 
   useEffect(() => {
     if (page > totalPages) setPage(totalPages);
@@ -58,12 +63,14 @@ function HistoryPage() {
                   <span className="font-display text-xl text-foreground">Customer</span>
                 )}
                 <span className="text-xs text-muted-foreground">
-                  {new Date(f.at).toLocaleString("id-ID", {
-                    day: "numeric",
-                    month: "long",
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
+                  {isMounted
+                    ? new Date(f.at).toLocaleString("id-ID", {
+                        day: "numeric",
+                        month: "long",
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })
+                    : ""}
                 </span>
               </div>
               <p className="mt-1 text-xs text-muted-foreground">

@@ -70,6 +70,7 @@ type State = {
   accounts: Account[];
   notes: Note[];
   sheetUrl: string;
+  impersonating?: boolean;
 };
 
 const rawSeed: Array<
@@ -275,11 +276,14 @@ const initial: State = {
     },
   ],
   sheetUrl: "https://docs.google.com/spreadsheets/d/1ACCLeadsDemo/edit",
+  impersonating: false,
 };
 
 type Ctx = State & {
   dbStatus: { type: "PostgreSQL" | "File System" | "Local Cache"; connected: boolean };
   setRole: (r: Role | null) => void;
+  impersonate: (user: string) => void;
+  stopImpersonate: () => void;
   addFollowUp: (f: Omit<FollowUp, "id" | "at" | "by">) => void;
   updateCustomer: (id: string, patch: Partial<Customer>) => void;
   addCustomers: (c: Customer[]) => void;
@@ -382,7 +386,15 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       ...state,
       dbStatus,
       setRole: (role) =>
-        patch((s) => ({ ...s, role, user: role === "admin" ? "Admin Utama" : "Sales · Rio" })),
+        patch((s) => ({
+          ...s,
+          role,
+          user: role === "admin" ? "Admin Utama" : "Sales · Rio",
+          impersonating: false,
+        })),
+      impersonate: (user) => patch((s) => ({ ...s, role: "sales", user, impersonating: true })),
+      stopImpersonate: () =>
+        patch((s) => ({ ...s, role: "admin", user: "Admin Utama", impersonating: false })),
       addFollowUp: (f) =>
         patch((s) => ({
           ...s,

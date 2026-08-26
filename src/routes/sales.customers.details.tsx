@@ -29,7 +29,7 @@ export const Route = createFileRoute("/sales/customers/details")({
 
 function CustomerDetails() {
   const { id } = Route.useSearch();
-  const { customers } = useStore();
+  const { customers, followUps } = useStore();
   const [open, setOpen] = useState(false);
 
   const customer = customers.find((c) => c.id === id);
@@ -48,6 +48,18 @@ function CustomerDetails() {
       </AppShell>
     );
   }
+
+  // Sort follow-ups chronologically (oldest to newest) to get sequence index
+  const sortedFollowUps = [...followUps.filter((f) => f.customerId === customer.id)].sort(
+    (a, b) => new Date(a.at).getTime() - new Date(b.at).getTime(),
+  );
+
+  const displayHistory = sortedFollowUps
+    .map((f, idx) => ({
+      ...f,
+      seqNumber: idx + 1,
+    }))
+    .reverse();
 
   const fields: Array<[string, string]> = [
     ["Nama Customer", customer.name],
@@ -79,31 +91,97 @@ function CustomerDetails() {
         <ArrowLeft className="size-4" /> Kembali ke data customer
       </Link>
 
-      <section className="surface-card mt-5 p-5">
-        <div className="flex items-center justify-between">
-          <h2 className="text-base font-medium text-foreground">Informasi customer</h2>
-          <StatusBadge status={customer.status} />
-        </div>
-        <dl className="mt-4 grid gap-4 sm:grid-cols-2">
-          {fields.map(([k, v]) => (
-            <div key={k}>
-              <dt className="text-xs uppercase tracking-wider text-muted-foreground">{k}</dt>
-              <dd className="mt-1 text-sm text-foreground">{v}</dd>
-            </div>
-          ))}
-          <div>
-            <dt className="text-xs uppercase tracking-wider text-muted-foreground">Status</dt>
-            <dd className="mt-1">
-              <StatusBadge status={customer.status} />
-            </dd>
+      <div className="mt-5 space-y-6">
+        <section className="surface-card p-5">
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-semibold text-foreground">Informasi customer</h2>
+            <StatusBadge status={customer.status} />
           </div>
-        </dl>
+          <dl className="mt-4 grid gap-4 sm:grid-cols-2">
+            {fields.map(([k, v]) => (
+              <div key={k}>
+                <dt className="text-xs uppercase tracking-wider text-muted-foreground">{k}</dt>
+                <dd className="mt-1 text-sm text-foreground">{v}</dd>
+              </div>
+            ))}
+            <div>
+              <dt className="text-xs uppercase tracking-wider text-muted-foreground">Status</dt>
+              <dd className="mt-1">
+                <StatusBadge status={customer.status} />
+              </dd>
+            </div>
+          </dl>
 
-        <div className="mt-6 flex flex-wrap gap-2">
-          <WaButton customer={customer} label="Chat WhatsApp" />
-          <CallButton customer={customer} label="Telepon Seluler" />
-        </div>
-      </section>
+          <div className="mt-6 flex flex-wrap gap-2">
+            <WaButton customer={customer} label="Chat WhatsApp" />
+            <CallButton customer={customer} label="Telepon Seluler" />
+          </div>
+        </section>
+
+        <section className="surface-card">
+          <div className="border-b border-border px-5 py-4 flex items-center justify-between">
+            <h2 className="text-base font-semibold text-foreground">Hasil Riwayat Follow Up</h2>
+            <span className="text-xs font-medium bg-primary/10 text-primary px-2.5 py-1 rounded-full">
+              Total: {displayHistory.length} Follow Up
+            </span>
+          </div>
+          <ul className="divide-y divide-border/60">
+            {displayHistory.map((f) => (
+              <li key={f.id} className="p-5 hover:bg-muted/20 transition-colors">
+                <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className="inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold bg-primary text-primary-foreground shadow-xs">
+                      Follow Up ke-{f.seqNumber}
+                    </span>
+                    <span className="text-xs font-medium text-foreground bg-secondary px-2 py-0.5 rounded">
+                      {f.channel} · {f.outcome}
+                    </span>
+                  </div>
+                  <span className="text-xs text-muted-foreground font-medium">
+                    {new Date(f.at).toLocaleString("id-ID", {
+                      day: "numeric",
+                      month: "short",
+                      year: "numeric",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </span>
+                </div>
+
+                {f.interest && (
+                  <p className="text-xs font-semibold text-primary mt-1.5">
+                    Respon / Minat: {f.interest}
+                  </p>
+                )}
+
+                {f.reason && (
+                  <div className="mt-2 rounded-lg bg-muted/40 p-3 border border-border/50">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-1">
+                      Catatan & Alasan:
+                    </p>
+                    <p className="text-sm text-foreground whitespace-pre-wrap">{f.reason}</p>
+                  </div>
+                )}
+
+                <div className="mt-2.5 flex flex-wrap items-center justify-between text-xs text-muted-foreground pt-1 border-t border-border/30">
+                  <span>
+                    Tindakan lanjut:{" "}
+                    <strong className="text-foreground">{f.nextAction || "-"}</strong>
+                  </span>
+                  <span>
+                    Dicatat oleh: <strong className="text-foreground">{f.by || "-"}</strong>
+                  </span>
+                </div>
+              </li>
+            ))}
+            {displayHistory.length === 0 && (
+              <li className="px-5 py-8 text-sm text-muted-foreground text-center">
+                Belum ada riwayat follow up untuk customer ini.
+              </li>
+            )}
+          </ul>
+        </section>
+      </div>
 
       <FollowUpDialog customer={customer} open={open} onOpenChange={setOpen} />
     </AppShell>

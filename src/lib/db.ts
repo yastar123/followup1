@@ -109,9 +109,22 @@ let isPgConnected = false;
 async function getPgClient(): Promise<Client | null> {
   if (pgClient) return pgClient;
 
-  const connectionString = process.env.DATABASE_URL || process.env.PG_CONN_STR;
-  if (!connectionString && !process.env.PGHOST) {
-    console.log("No PostgreSQL environment variables found. Running with file-based database.");
+  let connectionString = process.env.DATABASE_URL || process.env.PG_CONN_STR;
+  if (connectionString) {
+    connectionString = connectionString.trim().replace(/^['"]|['"]$/g, "");
+  }
+
+  const pgHost = process.env.PGHOST;
+
+  // If connectionString or pgHost is "base", it is a placeholder from the hosting platform
+  const hasPostgres =
+    (connectionString && connectionString !== "base" && !connectionString.includes("localhost")) ||
+    (pgHost && pgHost !== "base" && pgHost !== "localhost");
+
+  if (!hasPostgres) {
+    console.log(
+      "No PostgreSQL environment variables configured or using localhost on cloud environment. Running with file-based database.",
+    );
     return null;
   }
 
@@ -119,7 +132,7 @@ async function getPgClient(): Promise<Client | null> {
     const config = connectionString
       ? { connectionString, ssl: { rejectUnauthorized: false } }
       : {
-          host: process.env.PGHOST,
+          host: pgHost,
           user: process.env.PGUSER,
           password: process.env.PGPASSWORD,
           database: process.env.PGDATABASE,
