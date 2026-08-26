@@ -348,7 +348,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           })
             .then(() => setIsLoaded(true))
             .catch((err) => {
-              console.error("Failed to seed database", err);
+              console.warn("Failed to seed database", err);
               setIsLoaded(true);
             });
         }
@@ -373,7 +373,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(state),
-      }).catch((err) => console.error("Auto-sync to backend database failed:", err));
+      }).catch((err) => console.warn("Auto-sync to backend database failed:", err));
     }, 500);
 
     return () => clearTimeout(timer);
