@@ -146,15 +146,6 @@ function LoginPage() {
               <ArrowRight className="size-4" />
             </Button>
           </form>
-
-          <div className="mt-8 rounded-lg border border-border bg-secondary/40 p-4">
-            <p className="text-xs font-medium text-foreground">Akun demo</p>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Sales: rio@acc.co.id · Admin: admin@acc.co.id
-              <br />
-              Sandi apa saja minimal 6 karakter.
-            </p>
-          </div>
         </div>
       </div>
     </div>
