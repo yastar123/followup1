@@ -835,16 +835,29 @@ function DataPage() {
               </span>
             ) : null}
             {staged.length ? (
-              <Button
-                variant="ghost"
-                className="gap-1.5 text-destructive hover:bg-destructive/10 w-full sm:w-auto justify-center text-xs sm:text-sm"
-                onClick={() => {
-                  setStaged([]);
-                  setFileName("");
-                }}
-              >
-                <Trash2 className="size-4" /> Bersihkan
-              </Button>
+              <>
+                <Button
+                  onClick={saveAll}
+                  disabled={isSaving}
+                  className="gap-2 font-medium shadow-sm w-full sm:w-auto justify-center text-xs sm:text-sm"
+                >
+                  {isSaving ? (
+                    <>Menyimpan ke PostgreSQL...</>
+                  ) : (
+                    <>Simpan ke Database PostgreSQL ({staged.length} data)</>
+                  )}
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="gap-1.5 text-destructive hover:bg-destructive/10 w-full sm:w-auto justify-center text-xs sm:text-sm"
+                  onClick={() => {
+                    setStaged([]);
+                    setFileName("");
+                  }}
+                >
+                  <Trash2 className="size-4" /> Bersihkan
+                </Button>
+              </>
             ) : null}
             <input
               ref={fileRef}
@@ -860,86 +873,11 @@ function DataPage() {
           </div>
         </section>
 
-        {/* Section 2: Assign Range & Staged Table */}
+        {/* Section 2: Staged Preview Table & Save Button */}
         {staged.length ? (
           <>
             <section className="surface-card p-4 sm:p-6 space-y-4">
-              <div>
-                <h2 className="text-base sm:text-lg font-medium text-foreground">
-                  2. Bagi customer ke sales (per rentang)
-                </h2>
-                <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
-                  Contoh: customer 1–50 ke Sales 1, 51–120 ke Sales 2. Ditugaskan: {assignedCount}{" "}
-                  dari {staged.length}.
-                </p>
-              </div>
-
-              <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1.4fr_auto] items-end">
-                <div className="space-y-1.5">
-                  <Label htmlFor="from" className="text-xs font-medium">
-                    Dari nomor
-                  </Label>
-                  <Input
-                    id="from"
-                    type="number"
-                    min={1}
-                    max={staged.length}
-                    value={from}
-                    onChange={(e) => setFrom(e.target.value)}
-                    className="text-xs h-9"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="to" className="text-xs font-medium">
-                    Sampai nomor
-                  </Label>
-                  <Input
-                    id="to"
-                    type="number"
-                    min={1}
-                    max={staged.length}
-                    value={to}
-                    onChange={(e) => setTo(e.target.value)}
-                    className="text-xs h-9"
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium">Sales penanggung jawab</Label>
-                  <Select value={sales} onValueChange={setSales}>
-                    <SelectTrigger className="text-xs h-9">
-                      <SelectValue placeholder="Pilih sales" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {salesList.map((a) => (
-                        <SelectItem key={a.id} value={a.name.split(" ")[0] ?? a.name}>
-                          {a.name} · {a.email}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Button onClick={assignRange} className="gap-1.5 text-xs h-9 w-full lg:w-auto">
-                  <UserCheck className="size-4" /> Tugaskan
-                </Button>
-              </div>
-
-              <div className="pt-2 flex flex-col sm:flex-row gap-2">
-                <Button
-                  onClick={saveAll}
-                  disabled={isSaving}
-                  className="gap-2 font-medium shadow-sm w-full sm:w-auto justify-center text-xs sm:text-sm"
-                >
-                  {isSaving ? (
-                    <>Menyimpan ke PostgreSQL...</>
-                  ) : (
-                    <>Simpan ke Database PostgreSQL ({staged.length} data)</>
-                  )}
-                </Button>
-              </div>
-            </section>
-
-            <section className="surface-card p-4 sm:p-6">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div>
                   <h2 className="text-base sm:text-lg font-medium text-foreground">
                     Pratinjau Data Impor ({staged.length} Baris)
@@ -948,13 +886,23 @@ function DataPage() {
                     Memeriksa struktur 10 kolom sebelum disimpan ke database aktif.
                   </p>
                 </div>
-                <Badge variant="outline" className="w-fit text-xs font-mono bg-muted/40">
-                  {assignedCount} dari {staged.length} ditugaskan
-                </Badge>
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
+                  <Button
+                    onClick={saveAll}
+                    disabled={isSaving}
+                    className="gap-2 font-medium shadow-sm w-full sm:w-auto justify-center text-xs sm:text-sm"
+                  >
+                    {isSaving ? (
+                      <>Menyimpan ke PostgreSQL...</>
+                    ) : (
+                      <>Simpan ke Database PostgreSQL ({staged.length} data)</>
+                    )}
+                  </Button>
+                </div>
               </div>
 
               {/* Mobile horizontal scroll hint */}
-              <p className="mt-2 block sm:hidden text-[11px] text-muted-foreground italic">
+              <p className="block sm:hidden text-[11px] text-muted-foreground italic">
                 ← Geser layar ke samping untuk melihat seluruh kolom tabel →
               </p>
 
