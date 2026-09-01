@@ -103,11 +103,27 @@ function CustomerList() {
         return false;
       }
 
-      // Search text match
-      const matchText = `${c.name} ${c.unit} ${c.segment} ${c.phone}`
-        .toLowerCase()
-        .includes(q.toLowerCase());
-      if (!matchText) return false;
+      // Search text match across 10 fields
+      const searchTerms = [
+        c.name,
+        c.contractNumber,
+        c.phone,
+        c.postalCode,
+        c.mod,
+        c.unitType,
+        c.year,
+        c.unit,
+        c.segment,
+        c.contractStatus,
+        c.handling,
+        c.company,
+        c.city,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      if (q.trim() && !searchTerms.includes(q.trim().toLowerCase())) return false;
 
       const lastFollow = latestFollowUpByCustomer.get(c.id);
 
@@ -218,15 +234,16 @@ function CustomerList() {
 
       <div className="surface-card mt-6 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[760px] text-sm [&_td]:whitespace-nowrap [&_th]:whitespace-nowrap">
+          <table className="w-full min-w-[920px] text-sm [&_td]:whitespace-nowrap [&_th]:whitespace-nowrap">
             <thead className="bg-secondary/60 text-left text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
-                <th className="px-5 py-3 font-medium">Nama Customer</th>
-                <th className="px-5 py-3 font-medium">Nomor HP</th>
-                <th className="px-5 py-3 font-medium">Unit Mobil</th>
-                <th className="px-5 py-3 font-medium">Segmentasi</th>
-                <th className="px-5 py-3 font-medium">Status / Respon Terakhir</th>
-                <th className="px-5 py-3 text-right font-medium">Aksi</th>
+                <th className="px-5 py-3 font-medium">Customer &amp; No. Kontrak</th>
+                <th className="px-5 py-3 font-medium">No. Telepon / WA</th>
+                <th className="px-5 py-3 font-medium">Unit &amp; Tahun</th>
+                <th className="px-5 py-3 font-medium">Status Kontrak</th>
+                <th className="px-5 py-3 font-medium">Segmentasi &amp; Handling</th>
+                <th className="px-5 py-3 font-medium">Hasil Follow Up</th>
+                <th className="px-5 py-3 text-right font-medium">Aksi Cepat</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -245,25 +262,61 @@ function CustomerList() {
                         to="/sales/customers/details"
                         search={{ id: c.id }}
                         onClick={(e) => e.stopPropagation()}
-                        className="font-medium text-foreground hover:text-primary"
+                        className="font-medium text-foreground hover:text-primary block"
                       >
                         {c.name}
                       </Link>
+                      <span className="text-xs font-mono text-muted-foreground">
+                        {c.contractNumber || "-"}
+                      </span>
                     </td>
-                    <td className="px-5 py-3.5 text-muted-foreground">+{c.phone}</td>
-                    <td className="px-5 py-3.5 text-muted-foreground">{c.unit}</td>
-                    <td className="px-5 py-3.5 text-muted-foreground">{c.segment}</td>
+                    <td className="px-5 py-3.5 font-mono text-xs text-foreground">
+                      {c.phone ? `+${c.phone}` : "-"}
+                      {c.postalCode && (
+                        <span className="block text-[11px] text-muted-foreground font-sans">
+                          Pos: {c.postalCode}
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <div className="font-medium text-foreground text-xs">
+                        {c.unitType || c.product || c.unit || "-"}
+                      </div>
+                      <div className="text-[11px] text-muted-foreground">
+                        {c.year ? `Thn ${c.year}` : ""} {c.mod ? `· MOD ${c.mod}` : ""}
+                      </div>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <span className="inline-block max-w-[160px] truncate text-xs bg-muted px-2 py-0.5 rounded text-muted-foreground">
+                        {c.contractStatus || c.company || "-"}
+                      </span>
+                    </td>
+                    <td className="px-5 py-3.5">
+                      <span className="font-semibold text-xs text-primary block">
+                        {c.segment || "-"}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {c.handling || c.region || "-"}
+                      </span>
+                    </td>
                     <td className="px-5 py-3.5">
                       {lastFollow ? (
-                        <span
-                          className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                            connectedOutcomes.has(lastFollow.outcome)
-                              ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
-                              : "bg-amber-500/10 text-amber-600 dark:text-amber-400"
-                          }`}
-                        >
-                          {lastFollow.outcome}
-                        </span>
+                        <div>
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
+                              connectedOutcomes.has(lastFollow.outcome)
+                                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                                : "bg-amber-500/10 text-amber-600 dark:text-amber-400"
+                            }`}
+                          >
+                            {lastFollow.outcome}
+                          </span>
+                          {lastFollow.interest && (
+                            <span className="block text-[11px] text-muted-foreground mt-0.5">
+                              {lastFollow.interest}
+                            </span>
+                          )}
+                        </div>
                       ) : (
                         <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-secondary text-muted-foreground">
                           Belum Follow Up
@@ -281,7 +334,7 @@ function CustomerList() {
               })}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="px-5 py-10 text-center text-muted-foreground">
+                  <td colSpan={7} className="px-5 py-10 text-center text-muted-foreground">
                     Tidak ada customer yang cocok untuk kategori filter{" "}
                     <strong className="text-foreground">{currentFilterLabel}</strong>.
                   </td>

@@ -78,18 +78,29 @@ function CustomerDetail() {
             </div>
             <dl className="mt-4 grid gap-4 sm:grid-cols-2">
               {[
-                ["Nomor WhatsApp", `+${customer.phone}`],
-                ["Perusahaan", customer.company],
-                ["Kota", customer.city],
-                ["Produk diminati", customer.product],
-                ["Nilai potensi", rupiah(customer.value)],
-                ["Sumber lead", customer.source],
-                ["Sales penanggung jawab", customer.owner],
-                ["Catatan", customer.note],
+                ["Nama Customer (NAMA)", customer.name],
+                ["Nomor Kontrak (NO KONTRAK)", customer.contractNumber || "-"],
+                ["Nomor WhatsApp / TLP (NO TLP)", customer.phone ? `+${customer.phone}` : "-"],
+                ["Kode Pos (KODE POST)", customer.postalCode || "-"],
+                ["MOD", customer.mod || "-"],
+                [
+                  "Tipe Unit (TYPE UNIT)",
+                  customer.unitType || customer.product || customer.unit || "-",
+                ],
+                ["Tahun Kendaraan (TAHUN)", customer.year || "-"],
+                ["Status Kontrak (STATUS)", customer.contractStatus || customer.company || "-"],
+                ["Segmentasi (SEGMENTASI)", customer.segment || "-"],
+                [
+                  "Handling / Cabang (HANDLING)",
+                  customer.handling || customer.region || customer.city || "-",
+                ],
+                ["Sales Penanggung Jawab", customer.owner || "Belum ditugaskan"],
               ].map(([k, v]) => (
-                <div key={k}>
-                  <dt className="text-xs uppercase tracking-wider text-muted-foreground">{k}</dt>
-                  <dd className="mt-1 text-sm text-foreground">{v}</dd>
+                <div key={k} className="p-2.5 rounded-lg bg-muted/20 border border-border/40">
+                  <dt className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    {k}
+                  </dt>
+                  <dd className="mt-1 text-sm font-medium text-foreground">{v}</dd>
                 </div>
               ))}
             </dl>

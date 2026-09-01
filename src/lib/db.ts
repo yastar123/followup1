@@ -4,21 +4,27 @@ import { Client } from "pg";
 
 export interface DbCustomer {
   id: string;
-  name: string;
-  phone: string;
-  city: string;
-  company: string;
-  product: string;
-  unit: string;
-  segment: string;
-  contractNumber: string;
-  region: string;
-  value: number;
-  source: string;
-  status: string;
-  owner: string;
-  note: string;
-  createdAt: string;
+  name: string; // NAMA
+  contractNumber: string; // NO KONTRAK
+  phone: string; // NO TLP
+  postalCode?: string; // KODE POST
+  mod?: string; // MOD
+  unitType?: string; // TYPE UNIT
+  year?: string; // TAHUN
+  contractStatus?: string; // STATUS
+  segment?: string; // SEGMENTASI
+  handling?: string; // HANDLING
+  city?: string;
+  company?: string;
+  product?: string;
+  unit?: string;
+  region?: string;
+  value?: number;
+  source?: string;
+  status?: string;
+  owner?: string;
+  note?: string;
+  createdAt?: string;
 }
 
 export interface DbFollowUp {
@@ -68,8 +74,8 @@ export type DbState = {
 
 const DB_FILE_PATH = path.join(process.cwd(), "acc_db.json");
 
-// Default initial state with clean database and single admin account
-const initialSeedData: DbState = {
+// Default clean initial state with zero dummy customers / followups
+export const initialCleanState: DbState = {
   customers: [],
   followUps: [],
   templates: [
@@ -100,13 +106,12 @@ const initialSeedData: DbState = {
 let pgClient: Client | null = null;
 let isPgConnected = false;
 let lastPgAttemptTime = 0;
-const PG_RECONNECT_COOLDOWN_MS = 30000; // 30s cooldown after connection failure
+const PG_RECONNECT_COOLDOWN_MS = 15000;
 
 // Check if PostgreSQL environment variables are defined and try to connect
-async function getPgClient(): Promise<Client | null> {
+export async function getPgClient(): Promise<Client | null> {
   if (pgClient && isPgConnected) return pgClient;
 
-  // Don't hammer the database on every request if recent connection attempt failed
   const now = Date.now();
   if (
     !isPgConnected &&
@@ -123,7 +128,6 @@ async function getPgClient(): Promise<Client | null> {
 
   const pgHost = process.env.PGHOST;
 
-  // Check if valid connection details exist
   const hasPostgres = Boolean(
     (connectionString && connectionString !== "base" && connectionString.trim().length > 0) ||
     (pgHost && pgHost !== "base" && pgHost.trim().length > 0),
@@ -145,7 +149,7 @@ async function getPgClient(): Promise<Client | null> {
     const config = connectionString
       ? {
           connectionString,
-          connectionTimeoutMillis: 2000,
+          connectionTimeoutMillis: 3000,
           ssl: isLocal ? false : { rejectUnauthorized: false },
         }
       : {
@@ -154,7 +158,7 @@ async function getPgClient(): Promise<Client | null> {
           password: process.env.PGPASSWORD || "",
           database: process.env.PGDATABASE || "postgres",
           port: Number(process.env.PGPORT) || 5432,
-          connectionTimeoutMillis: 2000,
+          connectionTimeoutMillis: 3000,
           ssl: isLocal ? false : { rejectUnauthorized: false },
         };
 
@@ -165,29 +169,34 @@ async function getPgClient(): Promise<Client | null> {
     console.log("[Database] Connected to PostgreSQL database successfully.");
     await initPgTables();
     return pgClient;
-  } catch {
-    // Graceful fallback to persistent JSON storage without polluting logs
+  } catch (err) {
     pgClient = null;
     isPgConnected = false;
     return null;
   }
 }
 
-async function initPgTables() {
+export async function initPgTables() {
   if (!pgClient) return;
   try {
-    // Create customers table
+    // 1. Create customers table with all 10 attributes
     await pgClient.query(`
       CREATE TABLE IF NOT EXISTS customers (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
+        contract_number TEXT DEFAULT '',
         phone TEXT NOT NULL,
+        postal_code TEXT DEFAULT '',
+        mod TEXT DEFAULT '',
+        unit_type TEXT DEFAULT '',
+        year TEXT DEFAULT '',
+        contract_status TEXT DEFAULT '',
+        segment TEXT DEFAULT '',
+        handling TEXT DEFAULT '',
         city TEXT DEFAULT '',
         company TEXT DEFAULT '',
         product TEXT DEFAULT '',
         unit TEXT DEFAULT '',
-        segment TEXT DEFAULT '',
-        contract_number TEXT DEFAULT '',
         region TEXT DEFAULT '',
         value INTEGER DEFAULT 0,
         source TEXT DEFAULT '',
@@ -198,7 +207,24 @@ async function initPgTables() {
       );
     `);
 
-    // Create follow_ups table
+    // Ensure columns exist if table was previously created with older schema
+    const alterCols = [
+      "ALTER TABLE customers ADD COLUMN IF NOT EXISTS postal_code TEXT DEFAULT ''",
+      "ALTER TABLE customers ADD COLUMN IF NOT EXISTS mod TEXT DEFAULT ''",
+      "ALTER TABLE customers ADD COLUMN IF NOT EXISTS unit_type TEXT DEFAULT ''",
+      "ALTER TABLE customers ADD COLUMN IF NOT EXISTS year TEXT DEFAULT ''",
+      "ALTER TABLE customers ADD COLUMN IF NOT EXISTS contract_status TEXT DEFAULT ''",
+      "ALTER TABLE customers ADD COLUMN IF NOT EXISTS handling TEXT DEFAULT ''",
+    ];
+    for (const sql of alterCols) {
+      try {
+        await pgClient.query(sql);
+      } catch {
+        /* ignore column already exists */
+      }
+    }
+
+    // 2. Create follow_ups table
     await pgClient.query(`
       CREATE TABLE IF NOT EXISTS follow_ups (
         id TEXT PRIMARY KEY,
@@ -213,7 +239,7 @@ async function initPgTables() {
       );
     `);
 
-    // Create templates table
+    // 3. Create templates table
     await pgClient.query(`
       CREATE TABLE IF NOT EXISTS templates (
         id TEXT PRIMARY KEY,
@@ -222,7 +248,7 @@ async function initPgTables() {
       );
     `);
 
-    // Create accounts table
+    // 4. Create accounts table
     await pgClient.query(`
       CREATE TABLE IF NOT EXISTS accounts (
         id TEXT PRIMARY KEY,
@@ -233,7 +259,7 @@ async function initPgTables() {
       );
     `);
 
-    // Create notes table
+    // 5. Create notes table
     await pgClient.query(`
       CREATE TABLE IF NOT EXISTS notes (
         id TEXT PRIMARY KEY,
@@ -245,7 +271,7 @@ async function initPgTables() {
       );
     `);
 
-    // Create acc_app_state table
+    // 6. Create acc_app_state table for synchronized snapshots
     await pgClient.query(`
       CREATE TABLE IF NOT EXISTS acc_app_state (
         key VARCHAR(50) PRIMARY KEY,
@@ -253,9 +279,10 @@ async function initPgTables() {
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
-    console.log("PostgreSQL schema validated successfully.");
+
+    console.log("[PostgreSQL] Tables & schemas validated successfully.");
   } catch (err) {
-    console.error("Failed to initialize PostgreSQL tables:", err);
+    console.error("[PostgreSQL] Failed to initialize PostgreSQL tables:", err);
   }
 }
 
@@ -266,11 +293,18 @@ export async function readDb(): Promise<DbState> {
     try {
       const res = await client.query("SELECT value FROM acc_app_state WHERE key = 'full_state'");
       if (res.rows.length > 0 && res.rows[0]?.value) {
-        return JSON.parse(res.rows[0].value) as DbState;
+        const parsed = JSON.parse(res.rows[0].value) as DbState;
+        return {
+          ...initialCleanState,
+          ...parsed,
+          customers: Array.isArray(parsed.customers) ? parsed.customers : [],
+          followUps: Array.isArray(parsed.followUps) ? parsed.followUps : [],
+          notes: Array.isArray(parsed.notes) ? parsed.notes : [],
+        };
       }
-      // If table is empty, write initial seed data
-      await writeDb(initialSeedData);
-      return initialSeedData;
+      // If table is empty, write initial clean data
+      await writeDb(initialCleanState);
+      return initialCleanState;
     } catch (err) {
       console.error("PostgreSQL read error, falling back to local file:", err);
     }
@@ -279,14 +313,21 @@ export async function readDb(): Promise<DbState> {
   // Fallback to local file DB
   try {
     if (!fs.existsSync(DB_FILE_PATH)) {
-      fs.writeFileSync(DB_FILE_PATH, JSON.stringify(initialSeedData, null, 2), "utf-8");
-      return initialSeedData;
+      fs.writeFileSync(DB_FILE_PATH, JSON.stringify(initialCleanState, null, 2), "utf-8");
+      return initialCleanState;
     }
     const raw = fs.readFileSync(DB_FILE_PATH, "utf-8");
-    return JSON.parse(raw) as DbState;
+    const parsed = JSON.parse(raw) as DbState;
+    return {
+      ...initialCleanState,
+      ...parsed,
+      customers: Array.isArray(parsed.customers) ? parsed.customers : [],
+      followUps: Array.isArray(parsed.followUps) ? parsed.followUps : [],
+      notes: Array.isArray(parsed.notes) ? parsed.notes : [],
+    };
   } catch (err) {
     console.error("Error reading file database:", err);
-    return initialSeedData;
+    return initialCleanState;
   }
 }
 
@@ -295,6 +336,7 @@ export async function writeDb(state: DbState): Promise<boolean> {
   const client = await getPgClient();
   if (client && isPgConnected) {
     try {
+      await client.query("BEGIN");
       const jsonStr = JSON.stringify(state);
       // 1. Update master state table
       await client.query(
@@ -304,21 +346,40 @@ export async function writeDb(state: DbState): Promise<boolean> {
         [jsonStr],
       );
 
-      // 2. Also sync to individual relational tables
+      // 2. Sync to individual relational tables
       if (Array.isArray(state.customers)) {
+        // Clear removed customers or sync full list
+        const customerIds = state.customers.map((c) => c.id);
+        if (customerIds.length === 0) {
+          await client.query("DELETE FROM customers");
+        } else {
+          await client.query("DELETE FROM customers WHERE NOT (id = ANY($1::text[]))", [
+            customerIds,
+          ]);
+        }
+
         for (const c of state.customers) {
           await client.query(
-            `INSERT INTO customers (id, name, phone, city, company, product, unit, segment, contract_number, region, value, source, status, owner, note)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+            `INSERT INTO customers (
+               id, name, contract_number, phone, postal_code, mod, unit_type, year, contract_status, segment, handling,
+               city, company, product, unit, region, value, source, status, owner, note
+             )
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
              ON CONFLICT (id) DO UPDATE SET
                name = EXCLUDED.name,
+               contract_number = EXCLUDED.contract_number,
                phone = EXCLUDED.phone,
+               postal_code = EXCLUDED.postal_code,
+               mod = EXCLUDED.mod,
+               unit_type = EXCLUDED.unit_type,
+               year = EXCLUDED.year,
+               contract_status = EXCLUDED.contract_status,
+               segment = EXCLUDED.segment,
+               handling = EXCLUDED.handling,
                city = EXCLUDED.city,
                company = EXCLUDED.company,
                product = EXCLUDED.product,
                unit = EXCLUDED.unit,
-               segment = EXCLUDED.segment,
-               contract_number = EXCLUDED.contract_number,
                region = EXCLUDED.region,
                value = EXCLUDED.value,
                source = EXCLUDED.source,
@@ -328,19 +389,63 @@ export async function writeDb(state: DbState): Promise<boolean> {
             [
               c.id,
               c.name,
+              c.contractNumber || "",
               c.phone,
+              c.postalCode || "",
+              c.mod || "",
+              c.unitType || "",
+              c.year || "",
+              c.contractStatus || "",
+              c.segment || "",
+              c.handling || "",
               c.city || "",
               c.company || "",
               c.product || "",
               c.unit || "",
-              c.segment || "",
-              c.contractNumber || "",
               c.region || "",
               c.value || 0,
               c.source || "",
               c.status || "Baru",
               c.owner || "",
               c.note || "",
+            ],
+          );
+        }
+      }
+
+      if (Array.isArray(state.followUps)) {
+        const followUpIds = state.followUps.map((f) => f.id);
+        if (followUpIds.length === 0) {
+          await client.query("DELETE FROM follow_ups");
+        } else {
+          await client.query("DELETE FROM follow_ups WHERE NOT (id = ANY($1::text[]))", [
+            followUpIds,
+          ]);
+        }
+
+        for (const f of state.followUps) {
+          await client.query(
+            `INSERT INTO follow_ups (id, customer_id, channel, outcome, interest, reason, next_action, by, at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+             ON CONFLICT (id) DO UPDATE SET
+               customer_id = EXCLUDED.customer_id,
+               channel = EXCLUDED.channel,
+               outcome = EXCLUDED.outcome,
+               interest = EXCLUDED.interest,
+               reason = EXCLUDED.reason,
+               next_action = EXCLUDED.next_action,
+               by = EXCLUDED.by,
+               at = EXCLUDED.at`,
+            [
+              f.id,
+              f.customerId,
+              f.channel || "WhatsApp",
+              f.outcome || "",
+              f.interest || "",
+              f.reason || "",
+              f.nextAction || "",
+              f.by || "",
+              f.at || new Date().toISOString(),
             ],
           );
         }
@@ -374,8 +479,32 @@ export async function writeDb(state: DbState): Promise<boolean> {
         }
       }
 
+      if (Array.isArray(state.notes)) {
+        for (const n of state.notes) {
+          await client.query(
+            `INSERT INTO notes (id, title, content, by, created_at, updated_at)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             ON CONFLICT (id) DO UPDATE SET
+               title = EXCLUDED.title,
+               content = EXCLUDED.content,
+               by = EXCLUDED.by,
+               updated_at = EXCLUDED.updated_at`,
+            [
+              n.id,
+              n.title,
+              n.content,
+              n.by,
+              n.createdAt || new Date().toISOString(),
+              n.updatedAt || new Date().toISOString(),
+            ],
+          );
+        }
+      }
+
+      await client.query("COMMIT");
       return true;
     } catch (err) {
+      await client.query("ROLLBACK").catch(() => {});
       console.error("PostgreSQL write error, falling back to local file:", err);
     }
   }
@@ -390,9 +519,16 @@ export async function writeDb(state: DbState): Promise<boolean> {
   }
 }
 
-export function getDbStatus(): { connected: boolean; type: "PostgreSQL" | "File System" } {
+export function getDbStatus(): {
+  connected: boolean;
+  type: "PostgreSQL" | "File System";
+  details?: string;
+} {
   return {
     connected: isPgConnected,
     type: isPgConnected ? "PostgreSQL" : "File System",
+    details: isPgConnected
+      ? "Terhubung ke database PostgreSQL aktif"
+      : "Mode penyimpanan lokal / fallback aktif",
   };
 }

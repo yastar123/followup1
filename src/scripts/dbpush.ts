@@ -2,8 +2,29 @@ import { Client } from "pg";
 import fs from "fs";
 import path from "path";
 
+// Auto load .env if available
+const envPath = path.join(process.cwd(), ".env");
+if (fs.existsSync(envPath)) {
+  const envContent = fs.readFileSync(envPath, "utf-8");
+  for (const line of envContent.split("\n")) {
+    const trimmed = line.trim();
+    if (!trimmed || trimmed.startsWith("#")) continue;
+    const eqIdx = trimmed.indexOf("=");
+    if (eqIdx !== -1) {
+      const key = trimmed.slice(0, eqIdx).trim();
+      const val = trimmed
+        .slice(eqIdx + 1)
+        .trim()
+        .replace(/^['"]|['"]$/g, "");
+      if (key && !process.env[key]) {
+        process.env[key] = val;
+      }
+    }
+  }
+}
+
 async function runDbPush() {
-  console.log("🚀 Starting PostgreSQL DB Push Script...");
+  console.log("🚀 Starting PostgreSQL DB Push Script (ACC One Database)...");
 
   const connectionString = process.env.DATABASE_URL || process.env.PG_CONN_STR;
   const config = connectionString
@@ -28,28 +49,51 @@ async function runDbPush() {
     await client.connect();
     console.log("✅ Successfully connected to PostgreSQL!");
 
-    // Create customers table
+    // Create customers table with 10 core columns
     console.log("Pushing table: customers...");
     await client.query(`
       CREATE TABLE IF NOT EXISTS customers (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
+        contract_number TEXT DEFAULT '',
         phone TEXT NOT NULL,
+        postal_code TEXT DEFAULT '',
+        mod TEXT DEFAULT '',
+        unit_type TEXT DEFAULT '',
+        year TEXT DEFAULT '',
+        contract_status TEXT DEFAULT '',
+        segment TEXT DEFAULT '',
+        handling TEXT DEFAULT '',
         city TEXT DEFAULT '',
         company TEXT DEFAULT '',
         product TEXT DEFAULT '',
         unit TEXT DEFAULT '',
-        segment TEXT DEFAULT '',
-        contract_number TEXT DEFAULT '',
         region TEXT DEFAULT '',
         value INTEGER DEFAULT 0,
         source TEXT DEFAULT '',
-        status TEXT DEFAULT 'Prospect',
+        status TEXT DEFAULT 'Baru',
         owner TEXT DEFAULT '',
         note TEXT DEFAULT '',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
+    // Column migrations
+    const cols = [
+      "ALTER TABLE customers ADD COLUMN IF NOT EXISTS postal_code TEXT DEFAULT ''",
+      "ALTER TABLE customers ADD COLUMN IF NOT EXISTS mod TEXT DEFAULT ''",
+      "ALTER TABLE customers ADD COLUMN IF NOT EXISTS unit_type TEXT DEFAULT ''",
+      "ALTER TABLE customers ADD COLUMN IF NOT EXISTS year TEXT DEFAULT ''",
+      "ALTER TABLE customers ADD COLUMN IF NOT EXISTS contract_status TEXT DEFAULT ''",
+      "ALTER TABLE customers ADD COLUMN IF NOT EXISTS handling TEXT DEFAULT ''",
+    ];
+    for (const sql of cols) {
+      try {
+        await client.query(sql);
+      } catch {
+        /* ignore */
+      }
+    }
 
     // Create follow_ups table
     console.log("Pushing table: follow_ups...");

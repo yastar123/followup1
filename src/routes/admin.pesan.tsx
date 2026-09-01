@@ -51,19 +51,25 @@ const CONTOH: { name: string; body: string; kapan: string }[] = [
   },
 ];
 
-const contohCustomer: Customer = {
+const defaultPreviewCustomer: Customer = {
   id: "preview",
-  name: "Budi Santoso",
-  phone: "6281234567890",
-  city: "JAKARTA",
-  company: "MOBIL BEKAS",
-  product: "TOYOTA 2019",
-  unit: "TOYOTA 2019",
-  segment: "RETAIL",
-  contractNumber: "1234567890",
-  region: "JAKARTA",
+  name: "[Nama Customer]",
+  contractNumber: "[No Kontrak]",
+  phone: "628xxxxxxxxxx",
+  postalCode: "[Kode Pos]",
+  mod: "[MOD]",
+  unitType: "[Tipe Unit]",
+  year: "[Tahun]",
+  contractStatus: "[Status Kontrak]",
+  segment: "[Segmentasi]",
+  handling: "[Cabang / Handling]",
+  city: "[Kota]",
+  company: "[Status Kontrak]",
+  product: "[Tipe Unit]",
+  unit: "[Tipe Unit]",
+  region: "[Cabang]",
   value: 0,
-  source: "Excel · OPEN",
+  source: "Database ACC",
   status: "Baru",
   owner: "Sales ACC",
   note: "",
@@ -71,11 +77,16 @@ const contohCustomer: Customer = {
 };
 
 function PesanPage() {
-  const { templates, saveTemplate, removeTemplate } = useStore();
+  const { templates, saveTemplate, removeTemplate, customers } = useStore();
   const [name, setName] = useState("");
   const [body, setBody] = useState("Selamat pagi Bapak/Ibu {{nama}}, ");
 
-  const preview = useMemo(() => renderTemplate(body, contohCustomer, "Sales ACC"), [body]);
+  const activePreviewCustomer = customers[0] ?? defaultPreviewCustomer;
+
+  const preview = useMemo(
+    () => renderTemplate(body, activePreviewCustomer, "Sales ACC"),
+    [body, activePreviewCustomer],
+  );
 
   const unknownVars = useMemo(() => {
     const known = new Set(TEMPLATE_VARS.map((v) => v.key));
@@ -277,7 +288,7 @@ function PesanPage() {
                   className="mt-3"
                 />
                 <p className="mt-2 whitespace-pre-wrap text-xs text-muted-foreground">
-                  Pratinjau: {renderTemplate(t.body, contohCustomer, "Sales ACC")}
+                  Pratinjau: {renderTemplate(t.body, activePreviewCustomer, "Sales ACC")}
                 </p>
               </div>
             ))}

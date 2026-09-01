@@ -62,18 +62,24 @@ function CustomerDetails() {
     .reverse();
 
   const fields: Array<[string, string]> = [
-    ["Nama Customer", customer.name],
-    ["Nomor HP", `+${customer.phone}`],
-    ["Unit", customer.unit],
-    ["Nomor Kontrak", customer.contractNumber],
-    ["Wilayah Handling", customer.region],
+    ["Nama Customer (NAMA)", customer.name],
+    ["Nomor Kontrak (NO KONTRAK)", customer.contractNumber || "-"],
+    ["Nomor Telepon (NO TLP)", customer.phone ? `+${customer.phone}` : "-"],
+    ["Kode Pos (KODE POST)", customer.postalCode || "-"],
+    ["MOD", customer.mod || "-"],
+    ["Tipe Unit (TYPE UNIT)", customer.unitType || customer.product || customer.unit || "-"],
+    ["Tahun Kendaraan (TAHUN)", customer.year || "-"],
+    ["Status Kontrak (STATUS)", customer.contractStatus || customer.company || "-"],
+    ["Segmentasi (SEGMENTASI)", customer.segment || "-"],
+    ["Handling / Cabang (HANDLING)", customer.handling || customer.region || "-"],
+    ["Sales Penanggung Jawab", customer.owner || "Belum ditugaskan"],
   ];
 
   return (
     <AppShell
       role="sales"
       title={customer.name}
-      subtitle={`${customer.unit} · ${customer.segment}`}
+      subtitle={`No. Kontrak: ${customer.contractNumber || "-"} · ${customer.unitType || customer.unit || "-"} (${customer.handling || customer.region || "-"})`}
       actions={
         <div className="flex gap-2 [&>*]:shrink-0">
           <Button variant="outline" onClick={() => setOpen(true)} className="gap-1.5">
@@ -94,25 +100,36 @@ function CustomerDetails() {
       <div className="mt-5 space-y-6">
         <section className="surface-card p-5">
           <div className="flex items-center justify-between">
-            <h2 className="text-base font-semibold text-foreground">Informasi customer</h2>
+            <div>
+              <h2 className="text-base font-semibold text-foreground">
+                Data Customer &amp; Kontrak (10 Parameter)
+              </h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Data terverifikasi dari file import database ACC One
+              </p>
+            </div>
             <StatusBadge status={customer.status} />
           </div>
-          <dl className="mt-4 grid gap-4 sm:grid-cols-2">
+          <dl className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {fields.map(([k, v]) => (
-              <div key={k}>
-                <dt className="text-xs uppercase tracking-wider text-muted-foreground">{k}</dt>
-                <dd className="mt-1 text-sm text-foreground">{v}</dd>
+              <div key={k} className="p-3 rounded-lg bg-muted/30 border border-border/50">
+                <dt className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  {k}
+                </dt>
+                <dd className="mt-1 text-sm font-medium text-foreground break-words">{v}</dd>
               </div>
             ))}
-            <div>
-              <dt className="text-xs uppercase tracking-wider text-muted-foreground">Status</dt>
+            <div className="p-3 rounded-lg bg-muted/30 border border-border/50">
+              <dt className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                Status Pipeline Sales
+              </dt>
               <dd className="mt-1">
                 <StatusBadge status={customer.status} />
               </dd>
             </div>
           </dl>
 
-          <div className="mt-6 flex flex-wrap gap-2">
+          <div className="mt-6 flex flex-wrap gap-2 pt-4 border-t border-border">
             <WaButton customer={customer} label="Chat WhatsApp" />
             <CallButton customer={customer} label="Telepon Seluler" />
           </div>

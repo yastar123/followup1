@@ -12,14 +12,22 @@ export type Role = "sales" | "admin";
 
 export type Customer = {
   id: string;
-  name: string;
-  phone: string;
+  name: string; // NAMA
+  contractNumber: string; // NO KONTRAK
+  phone: string; // NO TLP (normalized 62...)
+  postalCode: string; // KODE POST
+  mod: string; // MOD
+  unitType: string; // TYPE UNIT
+  year: string; // TAHUN
+  contractStatus: string; // STATUS
+  segment: string; // SEGMENTASI
+  handling: string; // HANDLING
+
+  // Compatibility and system fields
   city: string;
   company: string;
   product: string;
   unit: string;
-  segment: string;
-  contractNumber: string;
   region: string;
   value: number;
   source: string;
@@ -106,6 +114,7 @@ const initial: State = {
 
 type Ctx = State & {
   dbStatus: { type: "PostgreSQL" | "File System" | "Local Cache"; connected: boolean };
+  syncNow: (customState?: State) => Promise<boolean>;
   setRole: (r: Role | null, userName?: string) => void;
   impersonate: (user: string) => void;
   stopImpersonate: () => void;
@@ -123,7 +132,7 @@ type Ctx = State & {
 };
 
 const StoreContext = createContext<Ctx | null>(null);
-const KEY = "acc-followup-state-v2";
+const KEY = "acc-followup-state-v3";
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<State>(initial);
@@ -137,11 +146,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => {
-    // 1. Clear obsolete v1 demo cache & load fresh local cache
+    // 1. Clear any legacy demo caches
     try {
       localStorage.removeItem("acc-followup-state-v1");
+      localStorage.removeItem("acc-followup-state-v2");
       const raw = localStorage.getItem(KEY);
-      if (raw) setState({ ...initial, ...JSON.parse(raw) });
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        setState({
+          ...initial,
+          ...parsed,
+          customers: Array.isArray(parsed.customers) ? parsed.customers : [],
+          followUps: Array.isArray(parsed.followUps) ? parsed.followUps : [],
+          notes: Array.isArray(parsed.notes) ? parsed.notes : [],
+        });
+      }
     } catch {
       /* ignore */
     }
@@ -160,10 +179,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       })
       .then((serverState) => {
         if (serverState && Array.isArray(serverState.accounts)) {
-          setState((prev) => ({ ...prev, ...serverState }));
+          setState((prev) => ({
+            ...prev,
+            ...serverState,
+            customers: Array.isArray(serverState.customers) ? serverState.customers : [],
+            followUps: Array.isArray(serverState.followUps) ? serverState.followUps : [],
+            notes: Array.isArray(serverState.notes) ? serverState.notes : [],
+          }));
           setIsLoaded(true);
         } else {
-          // If server database is unseeded, initialize it
+          // If server database is unseeded, initialize it with clean state
           fetch("/api/state", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -171,7 +196,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           })
             .then(() => setIsLoaded(true))
             .catch((err) => {
-              console.warn("Failed to seed database", err);
+              console.warn("Failed to initialize database", err);
               setIsLoaded(true);
             });
         }
@@ -204,10 +229,35 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const patch = useCallback((fn: (s: State) => State) => setState((s) => fn(s)), []);
 
+  const syncNow = useCallback(
+    async (customState?: State): Promise<boolean> => {
+      const stateToSync = customState || state;
+      try {
+        localStorage.setItem(KEY, JSON.stringify(stateToSync));
+      } catch {
+        /* ignore */
+      }
+      try {
+        const res = await fetch("/api/state", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(stateToSync),
+        });
+        const data = await res.json();
+        return Boolean(data?.ok);
+      } catch (err) {
+        console.warn("Manual sync to backend database failed:", err);
+        return false;
+      }
+    },
+    [state],
+  );
+
   const value = useMemo<Ctx>(
     () => ({
       ...state,
       dbStatus,
+      syncNow,
       setRole: (role, userName) =>
         patch((s) => ({
           ...s,
@@ -297,7 +347,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       removeNote: (id) =>
         patch((s) => ({ ...s, notes: (s.notes ?? []).filter((n) => n.id !== id) })),
     }),
-    [state, patch, dbStatus],
+    [state, patch, dbStatus, syncNow],
   );
 
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>;
@@ -316,45 +366,74 @@ export const rupiah = (n: number) =>
     maximumFractionDigits: 0,
   }).format(n);
 
-/** Variabel template — dipetakan dari kolom file Excel yang diimpor di menu Database. */
+/** Variabel template — dipetakan dari 10 kolom file Excel yang diimpor di menu Database. */
 export const TEMPLATE_VARS = [
-  { key: "nama", label: "Nama customer", column: "NAME", example: "Budi Santoso" },
-  { key: "no_hp", label: "Nomor WhatsApp", column: "NO_TELP_HP", example: "6281234567890" },
-  {
-    key: "unit",
-    label: "Unit kendaraan (merek + tahun)",
-    column: "BRAND + YEAR",
-    example: "TOYOTA 2019",
-  },
+  { key: "nama", label: "Nama customer (NAMA)", column: "NAMA", example: "SAPARUDIN" },
   {
     key: "no_kontrak",
-    label: "Nomor kontrak / agreement",
-    column: "NO_AGGR",
-    example: "1234567890",
+    label: "Nomor kontrak (NO KONTRAK)",
+    column: "NO KONTRAK",
+    example: "0150057400245421",
   },
-  { key: "segmen", label: "Segmen customer", column: "SEGMEN", example: "RETAIL" },
   {
-    key: "grup_produk",
-    label: "Grup produk / status",
-    column: "GROUP_PRODUCT",
-    example: "MOBIL BEKAS",
+    key: "no_tlp",
+    label: "Nomor telepon / WA (NO TLP)",
+    column: "NO TLP",
+    example: "085267475365",
   },
-  { key: "cabang", label: "Cabang / handling", column: "HANDLING", example: "JAKARTA" },
-  { key: "status", label: "Status follow up saat ini", column: "-", example: "Baru" },
+  { key: "kode_pos", label: "Kode pos (KODE POST)", column: "KODE POST", example: "34163" },
+  { key: "mod", label: "MOD (MOD)", column: "MOD", example: "3" },
+  { key: "type_unit", label: "Tipe unit (TYPE UNIT)", column: "TYPE UNIT", example: "KIJANG" },
+  { key: "tahun", label: "Tahun kendaraan (TAHUN)", column: "TAHUN", example: "2001" },
+  {
+    key: "unit",
+    label: "Unit & Tahun lengkap (TYPE UNIT + TAHUN)",
+    column: "TYPE UNIT + TAHUN",
+    example: "KIJANG 2001",
+  },
+  {
+    key: "status_kontrak",
+    label: "Status kontrak ACC (STATUS)",
+    column: "STATUS",
+    example: "03. Open Berjalan 56%-75%",
+  },
+  {
+    key: "segmentasi",
+    label: "Segmentasi (SEGMENTASI)",
+    column: "SEGMENTASI",
+    example: "SOLITAIRE",
+  },
+  {
+    key: "handling",
+    label: "Cabang / Handling (HANDLING)",
+    column: "HANDLING",
+    example: "BANDARJAYA",
+  },
+  { key: "status", label: "Status follow up sales", column: "-", example: "Baru" },
   { key: "sales", label: "Nama sales pengirim", column: "-", example: "Rio Saputra" },
 ] as const;
 
 export function renderTemplate(body: string, c: Customer, sales: string) {
   return body
-    .replaceAll("{{nama}}", c.name)
-    .replaceAll("{{no_hp}}", c.phone)
-    .replaceAll("{{unit}}", c.unit || c.product)
-    .replaceAll("{{no_kontrak}}", c.contractNumber)
-    .replaceAll("{{segmen}}", c.segment)
-    .replaceAll("{{grup_produk}}", c.company)
-    .replaceAll("{{cabang}}", c.city || c.region)
-    .replaceAll("{{status}}", c.status)
-    .replaceAll("{{sales}}", sales);
+    .replaceAll("{{nama}}", c.name || "")
+    .replaceAll("{{no_kontrak}}", c.contractNumber || "")
+    .replaceAll("{{no_tlp}}", c.phone || "")
+    .replaceAll("{{no_hp}}", c.phone || "")
+    .replaceAll("{{kode_pos}}", c.postalCode || "")
+    .replaceAll("{{kode_post}}", c.postalCode || "")
+    .replaceAll("{{mod}}", c.mod || "")
+    .replaceAll("{{type_unit}}", c.unitType || c.unit || "")
+    .replaceAll("{{tipe_unit}}", c.unitType || c.unit || "")
+    .replaceAll("{{tahun}}", c.year || "")
+    .replaceAll("{{unit}}", c.unit || `${c.unitType} ${c.year}`.trim() || c.product || "")
+    .replaceAll("{{status_kontrak}}", c.contractStatus || c.company || "")
+    .replaceAll("{{segmentasi}}", c.segment || "")
+    .replaceAll("{{segmen}}", c.segment || "")
+    .replaceAll("{{handling}}", c.handling || c.region || c.city || "")
+    .replaceAll("{{cabang}}", c.handling || c.region || c.city || "")
+    .replaceAll("{{grup_produk}}", c.contractStatus || c.company || "")
+    .replaceAll("{{status}}", c.status || "")
+    .replaceAll("{{sales}}", sales || "");
 }
 
 export const waLink = (phone: string, message: string) =>
