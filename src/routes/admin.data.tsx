@@ -804,16 +804,20 @@ function DataPage() {
     >
       <div className="grid gap-6">
         {/* Section 1: Excel Import */}
-        <section className="surface-card p-5">
-          <h2 className="text-base font-medium text-foreground">1. Import file Excel</h2>
-          <p className="mt-1 text-xs text-muted-foreground">
+        <section className="surface-card p-4 sm:p-6">
+          <h2 className="text-base sm:text-lg font-medium text-foreground">1. Import file Excel</h2>
+          <p className="mt-1 text-xs sm:text-sm text-muted-foreground leading-relaxed">
             Format 10 kolom baku: <strong>NAMA</strong>, <strong>NO KONTRAK</strong>,{" "}
             <strong>NO TLP</strong>, <strong>KODE POST</strong>, <strong>MOD</strong>,{" "}
             <strong>TYPE UNIT</strong>, <strong>TAHUN</strong>, <strong>STATUS</strong>,{" "}
             <strong>SEGMENTASI</strong>, <strong>HANDLING</strong>.
           </p>
-          <div className="mt-4 flex flex-wrap items-center gap-2">
-            <Button onClick={() => fileRef.current?.click()} disabled={loading} className="gap-1.5">
+          <div className="mt-4 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5">
+            <Button
+              onClick={() => fileRef.current?.click()}
+              disabled={loading}
+              className="gap-2 w-full sm:w-auto justify-center text-xs sm:text-sm"
+            >
               <FileSpreadsheet className="size-4" />
               {loading ? "Membaca file…" : "Pilih file Excel (.xlsx)"}
             </Button>
@@ -821,19 +825,19 @@ function DataPage() {
               type="button"
               variant="outline"
               onClick={downloadTemplate}
-              className="gap-1.5 border-primary/30 text-primary hover:bg-primary/5"
+              className="gap-2 border-primary/30 text-primary hover:bg-primary/5 w-full sm:w-auto justify-center text-xs sm:text-sm"
             >
               <Download className="size-4" /> Unduh Template Excel 10 Kolom (.xlsx)
             </Button>
             {fileName ? (
-              <span className="text-xs text-muted-foreground font-mono bg-muted/60 px-2 py-1 rounded">
+              <span className="text-xs text-muted-foreground font-mono bg-muted/60 px-3 py-2 sm:py-1.5 rounded-md flex items-center justify-center">
                 {fileName} · {staged.length} baris
               </span>
             ) : null}
             {staged.length ? (
               <Button
                 variant="ghost"
-                className="gap-1.5 text-destructive hover:bg-destructive/10"
+                className="gap-1.5 text-destructive hover:bg-destructive/10 w-full sm:w-auto justify-center text-xs sm:text-sm"
                 onClick={() => {
                   setStaged([]);
                   setFileName("");
@@ -859,17 +863,22 @@ function DataPage() {
         {/* Section 2: Assign Range & Staged Table */}
         {staged.length ? (
           <>
-            <section className="surface-card p-5">
-              <h2 className="text-base font-medium text-foreground">
-                2. Bagi customer ke sales (per rentang)
-              </h2>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Contoh: customer 1–50 ke Sales 1, 51–120 ke Sales 2. Ditugaskan: {assignedCount}{" "}
-                dari {staged.length}.
-              </p>
-              <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_1.4fr_auto] sm:items-end">
+            <section className="surface-card p-4 sm:p-6 space-y-4">
+              <div>
+                <h2 className="text-base sm:text-lg font-medium text-foreground">
+                  2. Bagi customer ke sales (per rentang)
+                </h2>
+                <p className="mt-1 text-xs sm:text-sm text-muted-foreground">
+                  Contoh: customer 1–50 ke Sales 1, 51–120 ke Sales 2. Ditugaskan: {assignedCount}{" "}
+                  dari {staged.length}.
+                </p>
+              </div>
+
+              <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1.4fr_auto] items-end">
                 <div className="space-y-1.5">
-                  <Label htmlFor="from">Dari nomor</Label>
+                  <Label htmlFor="from" className="text-xs font-medium">
+                    Dari nomor
+                  </Label>
                   <Input
                     id="from"
                     type="number"
@@ -877,10 +886,13 @@ function DataPage() {
                     max={staged.length}
                     value={from}
                     onChange={(e) => setFrom(e.target.value)}
+                    className="text-xs h-9"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="to">Sampai nomor</Label>
+                  <Label htmlFor="to" className="text-xs font-medium">
+                    Sampai nomor
+                  </Label>
                   <Input
                     id="to"
                     type="number"
@@ -888,12 +900,13 @@ function DataPage() {
                     max={staged.length}
                     value={to}
                     onChange={(e) => setTo(e.target.value)}
+                    className="text-xs h-9"
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>Sales penanggung jawab</Label>
+                  <Label className="text-xs font-medium">Sales penanggung jawab</Label>
                   <Select value={sales} onValueChange={setSales}>
-                    <SelectTrigger>
+                    <SelectTrigger className="text-xs h-9">
                       <SelectValue placeholder="Pilih sales" />
                     </SelectTrigger>
                     <SelectContent>
@@ -905,15 +918,16 @@ function DataPage() {
                     </SelectContent>
                   </Select>
                 </div>
-                <Button onClick={assignRange} className="gap-1.5">
+                <Button onClick={assignRange} className="gap-1.5 text-xs h-9 w-full lg:w-auto">
                   <UserCheck className="size-4" /> Tugaskan
                 </Button>
               </div>
-              <div className="mt-4 flex flex-wrap gap-2">
+
+              <div className="pt-2 flex flex-col sm:flex-row gap-2">
                 <Button
                   onClick={saveAll}
                   disabled={isSaving}
-                  className="gap-1.5 font-medium shadow-sm"
+                  className="gap-2 font-medium shadow-sm w-full sm:w-auto justify-center text-xs sm:text-sm"
                 >
                   {isSaving ? (
                     <>Menyimpan ke PostgreSQL...</>
@@ -924,23 +938,29 @@ function DataPage() {
               </div>
             </section>
 
-            <section className="surface-card p-5">
-              <div className="flex items-center justify-between">
+            <section className="surface-card p-4 sm:p-6">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
-                  <h2 className="text-base font-medium text-foreground">
+                  <h2 className="text-base sm:text-lg font-medium text-foreground">
                     Pratinjau Data Impor ({staged.length} Baris)
                   </h2>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     Memeriksa struktur 10 kolom sebelum disimpan ke database aktif.
                   </p>
                 </div>
-                <span className="text-xs text-muted-foreground">
+                <Badge variant="outline" className="w-fit text-xs font-mono bg-muted/40">
                   {assignedCount} dari {staged.length} ditugaskan
-                </span>
+                </Badge>
               </div>
-              <div className="mt-3 max-h-[480px] overflow-auto rounded-lg border border-border">
-                <table className="w-full text-left text-xs whitespace-nowrap">
-                  <thead className="sticky top-0 bg-muted text-muted-foreground shadow-sm">
+
+              {/* Mobile horizontal scroll hint */}
+              <p className="mt-2 block sm:hidden text-[11px] text-muted-foreground italic">
+                ← Geser layar ke samping untuk melihat seluruh kolom tabel →
+              </p>
+
+              <div className="mt-3 max-h-[480px] overflow-x-auto overflow-y-auto rounded-lg border border-border shadow-xs">
+                <table className="w-full text-left text-xs whitespace-nowrap min-w-[900px]">
+                  <thead className="sticky top-0 bg-muted/95 backdrop-blur-xs text-muted-foreground shadow-xs z-10">
                     <tr>
                       <th className="px-3 py-2.5 font-medium">#</th>
                       <th className="px-3 py-2.5 font-medium">NAMA</th>
@@ -1006,11 +1026,11 @@ function DataPage() {
         ) : null}
 
         {/* Section 3: Database Customer Aktif (CRUD Section) */}
-        <section className="surface-card p-5">
-          <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+        <section className="surface-card p-4 sm:p-6">
+          <div className="flex flex-col xl:flex-row xl:items-center justify-between gap-4">
             <div>
-              <div className="flex items-center gap-2">
-                <h2 className="text-base font-medium text-foreground">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="text-base sm:text-lg font-medium text-foreground">
                   Database Customer Aktif ({customers.length})
                 </h2>
                 <Badge
@@ -1020,27 +1040,38 @@ function DataPage() {
                   PostgreSQL Sync Active
                 </Badge>
               </div>
-              <p className="mt-0.5 text-xs text-muted-foreground">
+              <p className="mt-1 text-xs sm:text-sm text-muted-foreground leading-relaxed">
                 Semua data pelanggan tersimpan di database ACC One beserta 10 parameter lengkap.
                 Anda dapat Tambah (Create), Edit (Update), Hapus (Delete), serta Filter & Eksport
                 data.
               </p>
             </div>
-            <div className="flex flex-wrap items-center gap-2">
-              <Button onClick={handleOpenAdd} className="gap-1.5 font-medium">
+            <div className="grid grid-cols-1 sm:grid-cols-2 xl:flex xl:flex-wrap items-center gap-2 w-full xl:w-auto">
+              <Button
+                onClick={handleOpenAdd}
+                className="gap-2 font-medium w-full sm:w-auto justify-center text-xs sm:text-sm h-9"
+              >
                 <Plus className="size-4" /> Tambah Customer Baru
               </Button>
-              <Button variant="outline" onClick={exportCustomers} className="gap-1.5">
+              <Button
+                variant="outline"
+                onClick={exportCustomers}
+                className="gap-2 w-full sm:w-auto justify-center text-xs sm:text-sm h-9"
+              >
                 <Download className="size-4" /> Export Excel/CSV ({customers.length})
               </Button>
-              <Button variant="outline" onClick={exportFollowUps} className="gap-1.5">
+              <Button
+                variant="outline"
+                onClick={exportFollowUps}
+                className="gap-2 w-full sm:w-auto justify-center text-xs sm:text-sm h-9"
+              >
                 <Download className="size-4" /> Export Follow Up ({followUps.length})
               </Button>
               {customers.length > 0 ? (
                 <Button
                   variant="outline"
                   onClick={() => setIsClearAllOpen(true)}
-                  className="gap-1.5 text-destructive border-destructive/30 hover:bg-destructive/10"
+                  className="gap-2 text-destructive border-destructive/30 hover:bg-destructive/10 w-full sm:w-auto justify-center text-xs sm:text-sm h-9"
                 >
                   <Trash2 className="size-4" /> Kosongkan DB
                 </Button>
@@ -1050,12 +1081,12 @@ function DataPage() {
 
           {/* Range Assign Bar for Active PostgreSQL Database Customers */}
           {customers.length > 0 ? (
-            <div className="mt-5 p-4 rounded-xl border border-primary/20 bg-primary/5 space-y-3">
+            <div className="mt-5 p-3.5 sm:p-5 rounded-xl border border-primary/20 bg-primary/5 space-y-3.5">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                 <div>
-                  <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
-                    <UserCheck className="size-4 text-primary" /> Bagi customer ke sales (per
-                    rentang)
+                  <h3 className="text-xs sm:text-sm font-semibold text-foreground flex items-center gap-2">
+                    <UserCheck className="size-4 text-primary shrink-0" /> Bagi customer ke sales
+                    (per rentang)
                   </h3>
                   <p className="text-xs text-muted-foreground mt-0.5">
                     Contoh: customer 1–50 ke Sales 1, 51–120 ke Sales 2. Ditugaskan:{" "}
@@ -1064,13 +1095,13 @@ function DataPage() {
                 </div>
                 <Badge
                   variant="outline"
-                  className="w-fit text-[11px] font-mono bg-background border-primary/30 text-primary"
+                  className="w-fit text-[11px] font-mono bg-background border-primary/30 text-primary shrink-0"
                 >
                   {assignedDbCount} dari {customers.length} ditugaskan
                 </Badge>
               </div>
 
-              <div className="grid gap-3 sm:grid-cols-[1fr_1fr_1.4fr_auto] sm:items-end">
+              <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1.4fr_auto] items-end">
                 <div className="space-y-1.5">
                   <Label htmlFor="dbFrom" className="text-xs font-medium">
                     Dari nomor
@@ -1082,7 +1113,7 @@ function DataPage() {
                     max={customers.length}
                     value={dbFrom}
                     onChange={(e) => setDbFrom(e.target.value)}
-                    className="bg-background text-xs"
+                    className="bg-background text-xs h-9"
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -1096,13 +1127,13 @@ function DataPage() {
                     max={customers.length}
                     value={dbTo}
                     onChange={(e) => setDbTo(e.target.value)}
-                    className="bg-background text-xs"
+                    className="bg-background text-xs h-9"
                   />
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-xs font-medium">Sales penanggung jawab</Label>
                   <Select value={dbSales} onValueChange={setDbSales}>
-                    <SelectTrigger className="bg-background text-xs">
+                    <SelectTrigger className="bg-background text-xs h-9">
                       <SelectValue placeholder="Pilih sales" />
                     </SelectTrigger>
                     <SelectContent>
@@ -1120,7 +1151,7 @@ function DataPage() {
                 <Button
                   onClick={handleAssignDbRange}
                   disabled={isDbAssigning}
-                  className="gap-1.5 text-xs font-medium shadow-sm"
+                  className="gap-2 text-xs font-medium shadow-sm h-9 w-full lg:w-auto justify-center"
                 >
                   <UserCheck className="size-4" />
                   {isDbAssigning ? (
@@ -1134,14 +1165,14 @@ function DataPage() {
           ) : null}
 
           {/* Search, Filter & Controls Toolbar */}
-          <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-5 grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-4">
             <div className="relative">
               <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
               <Input
                 placeholder="Cari nama, kontrak, no HP, unit, cabang..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 text-xs"
+                className="pl-9 text-xs h-9"
               />
               {searchQuery ? (
                 <button
@@ -1155,7 +1186,7 @@ function DataPage() {
 
             <div>
               <Select value={filterStatus} onValueChange={setFilterStatus}>
-                <SelectTrigger className="text-xs">
+                <SelectTrigger className="text-xs h-9">
                   <SelectValue placeholder="Filter Status Prospek" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1171,7 +1202,7 @@ function DataPage() {
 
             <div>
               <Select value={filterSales} onValueChange={setFilterSales}>
-                <SelectTrigger className="text-xs">
+                <SelectTrigger className="text-xs h-9">
                   <SelectValue placeholder="Filter Sales Penanggung Jawab" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1191,7 +1222,7 @@ function DataPage() {
 
             <div>
               <Select value={filterSegment} onValueChange={setFilterSegment}>
-                <SelectTrigger className="text-xs">
+                <SelectTrigger className="text-xs h-9">
                   <SelectValue placeholder="Filter Segmentasi" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1208,9 +1239,9 @@ function DataPage() {
 
           {/* Bulk Action Bar (When rows are checked) */}
           {selectedIds.length > 0 ? (
-            <div className="mt-3 p-3 bg-primary/10 border border-primary/20 rounded-lg flex flex-wrap items-center justify-between gap-3 animate-in fade-in-50">
+            <div className="mt-4 p-3.5 bg-primary/10 border border-primary/20 rounded-lg flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 animate-in fade-in-50">
               <div className="flex items-center gap-2">
-                <CheckSquare className="size-4 text-primary" />
+                <CheckSquare className="size-4 text-primary shrink-0" />
                 <span className="text-xs font-semibold text-primary">
                   {selectedIds.length} data customer dipilih
                 </span>
@@ -1220,7 +1251,7 @@ function DataPage() {
                   size="sm"
                   variant="outline"
                   onClick={() => setIsBatchAssignOpen(true)}
-                  className="gap-1 text-xs border-primary/30 text-primary hover:bg-primary/10"
+                  className="gap-1.5 text-xs border-primary/30 text-primary hover:bg-primary/10 flex-1 sm:flex-none justify-center h-8"
                 >
                   <UserCheck className="size-3.5" /> Tugaskan Sales
                 </Button>
@@ -1228,7 +1259,7 @@ function DataPage() {
                   size="sm"
                   variant="destructive"
                   onClick={() => setIsDeleteBatchOpen(true)}
-                  className="gap-1 text-xs"
+                  className="gap-1.5 text-xs flex-1 sm:flex-none justify-center h-8"
                 >
                   <Trash2 className="size-3.5" /> Hapus Selected ({selectedIds.length})
                 </Button>
@@ -1236,7 +1267,7 @@ function DataPage() {
                   size="sm"
                   variant="ghost"
                   onClick={() => setSelectedIds([])}
-                  className="text-xs text-muted-foreground"
+                  className="text-xs text-muted-foreground w-full sm:w-auto h-8"
                 >
                   Batal Pilih
                 </Button>
@@ -1246,146 +1277,155 @@ function DataPage() {
 
           {/* Table Active Customers */}
           {filteredCustomers.length > 0 ? (
-            <div className="mt-4 max-h-[520px] overflow-auto rounded-lg border border-border">
-              <table className="w-full text-left text-xs whitespace-nowrap">
-                <thead className="sticky top-0 bg-muted text-muted-foreground shadow-sm z-10">
-                  <tr>
-                    <th className="px-3 py-2.5 font-medium w-8">
-                      <Checkbox
-                        checked={isAllSelected}
-                        onCheckedChange={toggleSelectAll}
-                        aria-label="Pilih Semua"
-                      />
-                    </th>
-                    <th className="px-3 py-2.5 font-medium">#</th>
-                    <th className="px-3 py-2.5 font-medium">NAMA CUSTOMER</th>
-                    <th className="px-3 py-2.5 font-medium">NO KONTRAK</th>
-                    <th className="px-3 py-2.5 font-medium">NO TLP / WA</th>
-                    <th className="px-3 py-2.5 font-medium">KODE POST</th>
-                    <th className="px-3 py-2.5 font-medium">MOD</th>
-                    <th className="px-3 py-2.5 font-medium">TYPE UNIT</th>
-                    <th className="px-3 py-2.5 font-medium">TAHUN</th>
-                    <th className="px-3 py-2.5 font-medium">STATUS KONTRAK</th>
-                    <th className="px-3 py-2.5 font-medium">SEGMENTASI</th>
-                    <th className="px-3 py-2.5 font-medium">HANDLING</th>
-                    <th className="px-3 py-2.5 font-medium">STATUS PROSPEK</th>
-                    <th className="px-3 py-2.5 font-medium">SALES PIC</th>
-                    <th className="px-3 py-2.5 font-medium text-right pr-4">AKSI</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border">
-                  {filteredCustomers.map((c, i) => {
-                    const isChecked = selectedIds.includes(c.id);
-                    return (
-                      <tr
-                        key={c.id}
-                        className={`hover:bg-muted/40 transition-colors ${
-                          isChecked ? "bg-primary/5" : ""
-                        }`}
-                      >
-                        <td className="px-3 py-2">
-                          <Checkbox
-                            checked={isChecked}
-                            onCheckedChange={() => toggleSelectOne(c.id)}
-                            aria-label={`Pilih ${c.name}`}
-                          />
-                        </td>
-                        <td className="px-3 py-2 text-muted-foreground font-mono">{i + 1}</td>
-                        <td className="px-3 py-2 font-medium text-foreground">
-                          <div className="flex flex-col">
-                            <span>{c.name}</span>
-                            {c.source ? (
-                              <span className="text-[10px] text-muted-foreground/70 font-mono">
-                                {c.source}
+            <div className="mt-4">
+              {/* Mobile scroll hint */}
+              <p className="mb-2 block sm:hidden text-[11px] text-muted-foreground italic">
+                ← Geser layar ke samping untuk melihat seluruh data pelanggan →
+              </p>
+
+              <div className="max-h-[520px] overflow-x-auto overflow-y-auto rounded-lg border border-border shadow-xs">
+                <table className="w-full text-left text-xs whitespace-nowrap min-w-[1000px]">
+                  <thead className="sticky top-0 bg-muted/95 backdrop-blur-xs text-muted-foreground shadow-xs z-10">
+                    <tr>
+                      <th className="px-3 py-2.5 font-medium w-8">
+                        <Checkbox
+                          checked={isAllSelected}
+                          onCheckedChange={toggleSelectAll}
+                          aria-label="Pilih Semua"
+                        />
+                      </th>
+                      <th className="px-3 py-2.5 font-medium">#</th>
+                      <th className="px-3 py-2.5 font-medium">NAMA CUSTOMER</th>
+                      <th className="px-3 py-2.5 font-medium">NO KONTRAK</th>
+                      <th className="px-3 py-2.5 font-medium">NO TLP / WA</th>
+                      <th className="px-3 py-2.5 font-medium">KODE POST</th>
+                      <th className="px-3 py-2.5 font-medium">MOD</th>
+                      <th className="px-3 py-2.5 font-medium">TYPE UNIT</th>
+                      <th className="px-3 py-2.5 font-medium">TAHUN</th>
+                      <th className="px-3 py-2.5 font-medium">STATUS KONTRAK</th>
+                      <th className="px-3 py-2.5 font-medium">SEGMENTASI</th>
+                      <th className="px-3 py-2.5 font-medium">HANDLING</th>
+                      <th className="px-3 py-2.5 font-medium">STATUS PROSPEK</th>
+                      <th className="px-3 py-2.5 font-medium">SALES PIC</th>
+                      <th className="px-3 py-2.5 font-medium text-right pr-4">AKSI</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-border">
+                    {filteredCustomers.map((c, i) => {
+                      const isChecked = selectedIds.includes(c.id);
+                      return (
+                        <tr
+                          key={c.id}
+                          className={`hover:bg-muted/40 transition-colors ${
+                            isChecked ? "bg-primary/5" : ""
+                          }`}
+                        >
+                          <td className="px-3 py-2">
+                            <Checkbox
+                              checked={isChecked}
+                              onCheckedChange={() => toggleSelectOne(c.id)}
+                              aria-label={`Pilih ${c.name}`}
+                            />
+                          </td>
+                          <td className="px-3 py-2 text-muted-foreground font-mono">{i + 1}</td>
+                          <td className="px-3 py-2 font-medium text-foreground">
+                            <div className="flex flex-col">
+                              <span>{c.name}</span>
+                              {c.source ? (
+                                <span className="text-[10px] text-muted-foreground/70 font-mono">
+                                  {c.source}
+                                </span>
+                              ) : null}
+                            </div>
+                          </td>
+                          <td className="px-3 py-2 font-mono text-muted-foreground">
+                            {c.contractNumber || "-"}
+                          </td>
+                          <td className="px-3 py-2 font-mono text-emerald-600 dark:text-emerald-400 font-medium">
+                            {c.phone ? `+${c.phone}` : "-"}
+                          </td>
+                          <td className="px-3 py-2 font-mono">{c.postalCode || "-"}</td>
+                          <td className="px-3 py-2 font-mono">{c.mod || "-"}</td>
+                          <td className="px-3 py-2 font-medium">
+                            {c.unitType || c.product || "-"}
+                          </td>
+                          <td className="px-3 py-2 font-mono">{c.year || "-"}</td>
+                          <td className="px-3 py-2">
+                            <span className="inline-block max-w-[180px] truncate text-[11px] bg-secondary/80 px-2 py-0.5 rounded">
+                              {c.contractStatus || c.company || "-"}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2">
+                            <span className="font-semibold text-primary">{c.segment || "-"}</span>
+                          </td>
+                          <td className="px-3 py-2">{c.handling || c.region || "-"}</td>
+                          <td className="px-3 py-2">
+                            <span
+                              className={`text-[11px] font-medium px-2 py-0.5 rounded ${
+                                c.status === "Closing"
+                                  ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30"
+                                  : c.status === "Tertarik"
+                                    ? "bg-blue-500/20 text-blue-700 dark:text-blue-300 border border-blue-500/30"
+                                    : c.status === "Proses"
+                                      ? "bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30"
+                                      : c.status === "Tidak Tertarik"
+                                        ? "bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-500/30"
+                                        : "bg-primary/10 text-primary border border-primary/20"
+                              }`}
+                            >
+                              {c.status || "Baru"}
+                            </span>
+                          </td>
+                          <td className="px-3 py-2">
+                            {c.owner === "Belum ditugaskan" || !c.owner ? (
+                              <span className="text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded text-[11px]">
+                                Belum ditugaskan
                               </span>
-                            ) : null}
-                          </div>
-                        </td>
-                        <td className="px-3 py-2 font-mono text-muted-foreground">
-                          {c.contractNumber || "-"}
-                        </td>
-                        <td className="px-3 py-2 font-mono text-emerald-600 dark:text-emerald-400 font-medium">
-                          {c.phone ? `+${c.phone}` : "-"}
-                        </td>
-                        <td className="px-3 py-2 font-mono">{c.postalCode || "-"}</td>
-                        <td className="px-3 py-2 font-mono">{c.mod || "-"}</td>
-                        <td className="px-3 py-2 font-medium">{c.unitType || c.product || "-"}</td>
-                        <td className="px-3 py-2 font-mono">{c.year || "-"}</td>
-                        <td className="px-3 py-2">
-                          <span className="inline-block max-w-[180px] truncate text-[11px] bg-secondary/80 px-2 py-0.5 rounded">
-                            {c.contractStatus || c.company || "-"}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2">
-                          <span className="font-semibold text-primary">{c.segment || "-"}</span>
-                        </td>
-                        <td className="px-3 py-2">{c.handling || c.region || "-"}</td>
-                        <td className="px-3 py-2">
-                          <span
-                            className={`text-[11px] font-medium px-2 py-0.5 rounded ${
-                              c.status === "Closing"
-                                ? "bg-emerald-500/20 text-emerald-700 dark:text-emerald-300 border border-emerald-500/30"
-                                : c.status === "Tertarik"
-                                  ? "bg-blue-500/20 text-blue-700 dark:text-blue-300 border border-blue-500/30"
-                                  : c.status === "Proses"
-                                    ? "bg-amber-500/20 text-amber-700 dark:text-amber-300 border border-amber-500/30"
-                                    : c.status === "Tidak Tertarik"
-                                      ? "bg-rose-500/20 text-rose-700 dark:text-rose-300 border border-rose-500/30"
-                                      : "bg-primary/10 text-primary border border-primary/20"
-                            }`}
-                          >
-                            {c.status || "Baru"}
-                          </span>
-                        </td>
-                        <td className="px-3 py-2">
-                          {c.owner === "Belum ditugaskan" || !c.owner ? (
-                            <span className="text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded text-[11px]">
-                              Belum ditugaskan
-                            </span>
-                          ) : (
-                            <span className="text-emerald-700 dark:text-emerald-300 font-medium bg-emerald-500/10 px-2 py-0.5 rounded text-[11px]">
-                              {c.owner}
-                            </span>
-                          )}
-                        </td>
-                        <td className="px-3 py-2 text-right pr-4">
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="size-7 p-0">
-                                <MoreHorizontal className="size-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end" className="w-40">
-                              <DropdownMenuItem
-                                onClick={() => handleOpenEdit(c)}
-                                className="gap-2 text-xs cursor-pointer"
-                              >
-                                <Pencil className="size-3.5 text-primary" /> Edit Parameter
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem
-                                onClick={() => {
-                                  setCustomerToDelete(c);
-                                  setIsDeleteSingleOpen(true);
-                                }}
-                                className="gap-2 text-xs text-destructive cursor-pointer focus:text-destructive"
-                              >
-                                <Trash2 className="size-3.5" /> Hapus Customer
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                            ) : (
+                              <span className="text-emerald-700 dark:text-emerald-300 font-medium bg-emerald-500/10 px-2 py-0.5 rounded text-[11px]">
+                                {rOwner(c.owner)}
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-3 py-2 text-right pr-4">
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="size-7 p-0">
+                                  <MoreHorizontal className="size-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end" className="w-40">
+                                <DropdownMenuItem
+                                  onClick={() => handleOpenEdit(c)}
+                                  className="gap-2 text-xs cursor-pointer"
+                                >
+                                  <Pencil className="size-3.5 text-primary" /> Edit Parameter
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    setCustomerToDelete(c);
+                                    setIsDeleteSingleOpen(true);
+                                  }}
+                                  className="gap-2 text-xs text-destructive cursor-pointer focus:text-destructive"
+                                >
+                                  <Trash2 className="size-3.5" /> Hapus Customer
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             </div>
           ) : (
-            <div className="mt-4 p-8 text-center border border-dashed rounded-lg text-muted-foreground text-sm space-y-2">
+            <div className="mt-4 p-6 sm:p-10 text-center border border-dashed rounded-lg text-muted-foreground text-xs sm:text-sm space-y-2">
               <p>Tidak ada data customer yang sesuai dengan pencarian atau filter saat ini.</p>
               {customers.length === 0 ? (
-                <Button onClick={handleOpenAdd} className="gap-1.5 mt-2">
+                <Button onClick={handleOpenAdd} className="gap-1.5 mt-2 text-xs sm:text-sm">
                   <Plus className="size-4" /> Tambah Customer Pertama
                 </Button>
               ) : (
@@ -1410,12 +1450,12 @@ function DataPage() {
 
       {/* MODAL 1: Tambah Customer Baru (Create) */}
       <Dialog open={isAddOpen} onOpenChange={setIsAddOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] sm:max-w-2xl max-h-[92vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-base">
+            <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
               <Plus className="size-5 text-primary" /> Tambah Data Customer Baru
             </DialogTitle>
-            <DialogDescription className="text-xs">
+            <DialogDescription className="text-xs sm:text-sm">
               Masukkan 10 parameter data customer secara lengkap. Data akan langsung disinkronkan ke
               PostgreSQL.
             </DialogDescription>
@@ -1636,11 +1676,16 @@ function DataPage() {
               </div>
             </div>
 
-            <DialogFooter className="pt-2">
-              <Button type="button" variant="outline" onClick={() => setIsAddOpen(false)}>
+            <DialogFooter className="flex flex-col-reverse sm:flex-row gap-2 pt-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsAddOpen(false)}
+                className="w-full sm:w-auto"
+              >
                 Batal
               </Button>
-              <Button type="submit" disabled={isSavingCustomer}>
+              <Button type="submit" disabled={isSavingCustomer} className="w-full sm:w-auto">
                 {isSavingCustomer ? "Menyimpan..." : "Simpan Customer ke DB"}
               </Button>
             </DialogFooter>
@@ -1650,12 +1695,12 @@ function DataPage() {
 
       {/* MODAL 2: Edit Customer (Update) */}
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="w-[95vw] sm:max-w-2xl max-h-[92vh] overflow-y-auto p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-base">
+            <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
               <Pencil className="size-5 text-primary" /> Edit Parameter Customer
             </DialogTitle>
-            <DialogDescription className="text-xs">
+            <DialogDescription className="text-xs sm:text-sm">
               Perbarui 10 parameter data customer. Perubahan langsung tersimpan ke PostgreSQL.
             </DialogDescription>
           </DialogHeader>
@@ -1865,24 +1910,29 @@ function DataPage() {
 
       {/* ALERT DIALOG 1: Hapus Single Customer */}
       <AlertDialog open={isDeleteSingleOpen} onOpenChange={setIsDeleteSingleOpen}>
-        <AlertDialogContent>
+        <AlertDialogContent className="w-[92vw] sm:max-w-lg p-4 sm:p-6">
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
-              <AlertTriangle className="size-5" /> Hapus Customer dari Database?
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive text-base sm:text-lg">
+              <AlertTriangle className="size-5 shrink-0" /> Hapus Customer dari Database?
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-xs">
+            <AlertDialogDescription className="text-xs sm:text-sm">
               Apakah Anda yakin ingin menghapus data customer{" "}
               <strong>{customerToDelete?.name}</strong> (No Kontrak:{" "}
               {customerToDelete?.contractNumber || "-"})? Tindakan ini akan menghapus data secara
               permanen dari database PostgreSQL.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel onClick={() => setCustomerToDelete(null)}>Batal</AlertDialogCancel>
+          <AlertDialogFooter className="flex flex-col-reverse sm:flex-row gap-2">
+            <AlertDialogCancel
+              onClick={() => setCustomerToDelete(null)}
+              className="w-full sm:w-auto"
+            >
+              Batal
+            </AlertDialogCancel>
             <AlertDialogAction
               onClick={handleConfirmDeleteSingle}
               disabled={isSavingCustomer}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 w-full sm:w-auto"
             >
               {isSavingCustomer ? "Menghapus..." : "Ya, Hapus Customer"}
             </AlertDialogAction>
@@ -1892,24 +1942,24 @@ function DataPage() {
 
       {/* ALERT DIALOG 2: Hapus Batch Selected */}
       <AlertDialog open={isDeleteBatchOpen} onOpenChange={setIsDeleteBatchOpen}>
-        <AlertDialogContent>
+        <AlertDialogContent className="w-[92vw] sm:max-w-lg p-4 sm:p-6">
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
-              <AlertTriangle className="size-5" /> Hapus {selectedIds.length} Data Customer
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive text-base sm:text-lg">
+              <AlertTriangle className="size-5 shrink-0" /> Hapus {selectedIds.length} Data Customer
               Terpilih?
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-xs">
+            <AlertDialogDescription className="text-xs sm:text-sm">
               Anda memilih <strong>{selectedIds.length} data customer</strong> untuk dihapus
               sekaligus. Tindakan ini tidak dapat dibatalkan dan data akan dihapus permanen dari
               PostgreSQL.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Batal</AlertDialogCancel>
+          <AlertDialogFooter className="flex flex-col-reverse sm:flex-row gap-2">
+            <AlertDialogCancel className="w-full sm:w-auto">Batal</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleConfirmDeleteBatch}
               disabled={isSavingCustomer}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 w-full sm:w-auto"
             >
               {isSavingCustomer ? "Menghapus..." : `Hapus ${selectedIds.length} Data`}
             </AlertDialogAction>
@@ -1919,23 +1969,23 @@ function DataPage() {
 
       {/* ALERT DIALOG 3: Kosongkan Seluruh Database */}
       <AlertDialog open={isClearAllOpen} onOpenChange={setIsClearAllOpen}>
-        <AlertDialogContent>
+        <AlertDialogContent className="w-[92vw] sm:max-w-lg p-4 sm:p-6">
           <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-destructive">
-              <Trash2 className="size-5" /> Kosongkan Seluruh Database Customer?
+            <AlertDialogTitle className="flex items-center gap-2 text-destructive text-base sm:text-lg">
+              <Trash2 className="size-5 shrink-0" /> Kosongkan Seluruh Database Customer?
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-xs">
+            <AlertDialogDescription className="text-xs sm:text-sm">
               Tindakan ini akan menghapus <strong>semua {customers.length} data customer</strong>{" "}
               yang tersimpan di database ACC One. Gunakan ini jika Anda ingin mereset dan mengunggah
               ulang data dari Excel baru.
             </AlertDialogDescription>
           </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Batal</AlertDialogCancel>
+          <AlertDialogFooter className="flex flex-col-reverse sm:flex-row gap-2">
+            <AlertDialogCancel className="w-full sm:w-auto">Batal</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleConfirmClearAll}
               disabled={isSavingCustomer}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 w-full sm:w-auto"
             >
               {isSavingCustomer ? "Mengosongkan..." : "Ya, Kosongkan Semua Data"}
             </AlertDialogAction>
@@ -1945,13 +1995,13 @@ function DataPage() {
 
       {/* DIALOG 4: Tugaskan Sales Massal */}
       <Dialog open={isBatchAssignOpen} onOpenChange={setIsBatchAssignOpen}>
-        <DialogContent className="max-w-md">
+        <DialogContent className="w-[92vw] sm:max-w-md p-4 sm:p-6">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2 text-base">
-              <UserCheck className="size-5 text-primary" /> Tugaskan {selectedIds.length} Customer
-              ke Sales
+            <DialogTitle className="flex items-center gap-2 text-base sm:text-lg">
+              <UserCheck className="size-5 text-primary shrink-0" /> Tugaskan {selectedIds.length}{" "}
+              Customer ke Sales
             </DialogTitle>
-            <DialogDescription className="text-xs">
+            <DialogDescription className="text-xs sm:text-sm">
               Pilih petugas sales yang akan menangani {selectedIds.length} customer terpilih.
             </DialogDescription>
           </DialogHeader>
@@ -1960,7 +2010,7 @@ function DataPage() {
             <div className="space-y-1.5">
               <Label className="text-xs font-semibold">Sales Penanggung Jawab</Label>
               <Select value={batchSalesTarget} onValueChange={setBatchSalesTarget}>
-                <SelectTrigger className="text-xs">
+                <SelectTrigger className="text-xs h-9">
                   <SelectValue placeholder="Pilih Sales PIC" />
                 </SelectTrigger>
                 <SelectContent>
@@ -1978,13 +2028,19 @@ function DataPage() {
             </div>
           </div>
 
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => setIsBatchAssignOpen(false)}>
+          <DialogFooter className="flex flex-col-reverse sm:flex-row gap-2 pt-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => setIsBatchAssignOpen(false)}
+              className="w-full sm:w-auto"
+            >
               Batal
             </Button>
             <Button
               onClick={handleConfirmBatchAssign}
               disabled={isSavingCustomer || !batchSalesTarget}
+              className="w-full sm:w-auto"
             >
               {isSavingCustomer ? "Menyimpan..." : "Tugaskan Sales"}
             </Button>
