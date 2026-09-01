@@ -148,16 +148,34 @@ function AkunPage() {
     return { total, salesCount, adminCount, activeCount, activePct };
   }, [accounts]);
 
-  // Customer Assignment Mapping per Sales Name
+  // Customer Assignment Mapping per Sales Account
   const customerCountsByOwner = useMemo(() => {
     const counts: Record<string, number> = {};
-    for (const c of customers) {
-      if (c.owner) {
-        counts[c.owner] = (counts[c.owner] || 0) + 1;
-      }
+    for (const a of accounts) {
+      if (a.role !== "sales") continue;
+
+      const nameLower = a.name.toLowerCase();
+      const emailLower = a.email.toLowerCase();
+      const firstNameLower = a.name.split(" ")[0]?.toLowerCase() ?? "";
+
+      const assigned = customers.filter((c) => {
+        if (!c.owner || c.owner === "Belum ditugaskan") return false;
+        const ownerLower = c.owner.toLowerCase();
+
+        if (ownerLower === nameLower || ownerLower === emailLower) return true;
+        if (ownerLower.includes(`sales · ${nameLower}`)) return true;
+        if (firstNameLower && ownerLower.includes(`sales · ${firstNameLower}`)) return true;
+        if (ownerLower.includes(nameLower)) return true;
+        if (ownerLower.includes(emailLower)) return true;
+
+        return false;
+      });
+
+      counts[a.id] = assigned.length;
+      counts[a.name] = assigned.length;
     }
     return counts;
-  }, [customers]);
+  }, [accounts, customers]);
 
   // Helper to generate a random password
   const generateRandomPassword = () => {
@@ -496,7 +514,7 @@ function AkunPage() {
                     <th className="px-5 py-3">Pengguna</th>
                     <th className="px-4 py-3">Kontak & Info</th>
                     <th className="px-4 py-3">Peran (Role)</th>
-                    <th className="px-4 py-3">Nasabah Dikelola</th>
+                    <th className="px-4 py-3">Customer Dikelola</th>
                     <th className="px-4 py-3">Status</th>
                     <th className="px-5 py-3 text-right">Aksi</th>
                   </tr>
@@ -630,7 +648,7 @@ function AkunPage() {
                               <span className="font-semibold text-foreground">
                                 {assignedCustomers}
                               </span>
-                              <span className="text-muted-foreground text-[11px]">nasabah</span>
+                              <span className="text-muted-foreground text-[11px]">customer</span>
                             </div>
                           ) : (
                             <span className="text-muted-foreground text-[11px]">—</span>
@@ -878,7 +896,7 @@ function AkunPage() {
                 <div>
                   <p className="text-xs font-semibold text-foreground">Status Keaktifan Akun</p>
                   <p className="text-[11px] text-muted-foreground">
-                    Akun aktif dapat langsung login dan menerima penugasan nasabah
+                    Akun aktif dapat langsung login dan menerima penugasan customer
                   </p>
                 </div>
                 <Switch checked={formActive} onCheckedChange={setFormActive} />
@@ -1053,8 +1071,8 @@ function AkunPage() {
                 {selectedAccount && customerCountsByOwner[selectedAccount.name] > 0 && (
                   <div className="p-3 rounded-md bg-amber-500/10 border border-amber-500/20 text-amber-800 dark:text-amber-200 text-xs">
                     Akun ini saat ini tercatat memiliki{" "}
-                    <strong>{customerCountsByOwner[selectedAccount.name]} nasabah</strong> yang
-                    ditugaskan. Anda dapat menugaskan ulang nasabah tersebut di menu Data & Impor.
+                    <strong>{customerCountsByOwner[selectedAccount.name]} customer</strong> yang
+                    ditugaskan. Anda dapat menugaskan ulang customer tersebut di menu Database.
                   </div>
                 )}
                 <p className="text-xs text-muted-foreground">
