@@ -1383,7 +1383,7 @@ function DataPage() {
                               </span>
                             ) : (
                               <span className="text-emerald-700 dark:text-emerald-300 font-medium bg-emerald-500/10 px-2 py-0.5 rounded text-[11px]">
-                                {rOwner(c.owner)}
+                                {c.owner}
                               </span>
                             )}
                           </td>
