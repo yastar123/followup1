@@ -99,10 +99,22 @@ const initialSeedData: DbState = {
 
 let pgClient: Client | null = null;
 let isPgConnected = false;
+let lastPgAttemptTime = 0;
+const PG_RECONNECT_COOLDOWN_MS = 30000; // 30s cooldown after connection failure
 
 // Check if PostgreSQL environment variables are defined and try to connect
 async function getPgClient(): Promise<Client | null> {
   if (pgClient && isPgConnected) return pgClient;
+
+  // Don't hammer the database on every request if recent connection attempt failed
+  const now = Date.now();
+  if (
+    !isPgConnected &&
+    lastPgAttemptTime > 0 &&
+    now - lastPgAttemptTime < PG_RECONNECT_COOLDOWN_MS
+  ) {
+    return null;
+  }
 
   let connectionString = process.env.DATABASE_URL || process.env.PG_CONN_STR;
   if (connectionString) {
@@ -111,18 +123,17 @@ async function getPgClient(): Promise<Client | null> {
 
   const pgHost = process.env.PGHOST;
 
-  // Check if valid connection details exist (accepting localhost or remote)
+  // Check if valid connection details exist
   const hasPostgres = Boolean(
     (connectionString && connectionString !== "base" && connectionString.trim().length > 0) ||
     (pgHost && pgHost !== "base" && pgHost.trim().length > 0),
   );
 
   if (!hasPostgres) {
-    console.log(
-      "No PostgreSQL environment variables configured. Running with file-based database.",
-    );
     return null;
   }
+
+  lastPgAttemptTime = now;
 
   try {
     const isLocal =
@@ -132,24 +143,30 @@ async function getPgClient(): Promise<Client | null> {
       pgHost === "127.0.0.1";
 
     const config = connectionString
-      ? { connectionString, ssl: isLocal ? false : { rejectUnauthorized: false } }
+      ? {
+          connectionString,
+          connectionTimeoutMillis: 2000,
+          ssl: isLocal ? false : { rejectUnauthorized: false },
+        }
       : {
           host: pgHost || "localhost",
           user: process.env.PGUSER || "postgres",
           password: process.env.PGPASSWORD || "",
           database: process.env.PGDATABASE || "postgres",
           port: Number(process.env.PGPORT) || 5432,
+          connectionTimeoutMillis: 2000,
           ssl: isLocal ? false : { rejectUnauthorized: false },
         };
 
-    pgClient = new Client(config);
-    await pgClient.connect();
+    const client = new Client(config);
+    await client.connect();
+    pgClient = client;
     isPgConnected = true;
-    console.log("Successfully connected to PostgreSQL database!");
+    console.log("[Database] Connected to PostgreSQL database successfully.");
     await initPgTables();
     return pgClient;
-  } catch (err) {
-    console.warn("PostgreSQL connection failed, falling back to file-based DB. Error:", err);
+  } catch {
+    // Graceful fallback to persistent JSON storage without polluting logs
     pgClient = null;
     isPgConnected = false;
     return null;

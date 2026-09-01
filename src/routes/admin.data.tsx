@@ -175,6 +175,83 @@ function DataPage() {
     toast.success(`${filename} diunduh.`);
   };
 
+  const downloadTemplate = async () => {
+    try {
+      const XLSX = await import("xlsx");
+      const sampleData = [
+        {
+          NAME: "Budi Santoso",
+          NO_AGGR: "01.100.2023.00192",
+          NO_TELP_HP: "081234567890",
+          MOD: "AVANZA G 1.5 MT",
+          BRAND: "TOYOTA",
+          YEAR: "2022",
+          SEGMEN: "RETAIL",
+          GROUP_PRODUCT: "PASSENGER CAR",
+          HANDLING: "JAKARTA SELATAN",
+        },
+        {
+          NAME: "Siti Rahmawati",
+          NO_AGGR: "01.100.2023.00481",
+          NO_TELP_HP: "085712345678",
+          MOD: "INNOVA ZENIX 2.0 V",
+          BRAND: "TOYOTA",
+          YEAR: "2023",
+          SEGMEN: "COMMERCIAL",
+          GROUP_PRODUCT: "PASSENGER CAR",
+          HANDLING: "SURABAYA",
+        },
+        {
+          NAME: "Ahmad Hidayat",
+          NO_AGGR: "01.100.2022.01254",
+          NO_TELP_HP: "081398765432",
+          MOD: "BR-V PRESTIGE CVT",
+          BRAND: "HONDA",
+          YEAR: "2021",
+          SEGMEN: "RETAIL",
+          GROUP_PRODUCT: "PASSENGER CAR",
+          HANDLING: "BANDUNG",
+        },
+      ];
+
+      const ws = XLSX.utils.json_to_sheet(sampleData, {
+        header: [
+          "NAME",
+          "NO_AGGR",
+          "NO_TELP_HP",
+          "MOD",
+          "BRAND",
+          "YEAR",
+          "SEGMEN",
+          "GROUP_PRODUCT",
+          "HANDLING",
+        ],
+      });
+
+      // Set column widths for better readability
+      ws["!cols"] = [
+        { wch: 22 }, // NAME
+        { wch: 20 }, // NO_AGGR
+        { wch: 16 }, // NO_TELP_HP
+        { wch: 22 }, // MOD
+        { wch: 12 }, // BRAND
+        { wch: 8 }, // YEAR
+        { wch: 14 }, // SEGMEN
+        { wch: 18 }, // GROUP_PRODUCT
+        { wch: 18 }, // HANDLING
+      ];
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, "DATA_CUSTOMER");
+
+      XLSX.writeFile(wb, "template-import-customer-acc.xlsx");
+      toast.success("Template Excel berhasil diunduh. Silakan isi data dan upload kembali.");
+    } catch (err) {
+      console.error(err);
+      toast.error("Gagal membuat template Excel.");
+    }
+  };
+
   const exportCustomers = () =>
     download(
       "database-customer-acc.csv",
@@ -236,6 +313,14 @@ function DataPage() {
             <Button onClick={() => fileRef.current?.click()} disabled={loading} className="gap-1.5">
               <FileSpreadsheet className="size-4" />
               {loading ? "Membaca file…" : "Pilih file Excel (.xlsx)"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={downloadTemplate}
+              className="gap-1.5 border-primary/30 text-primary hover:bg-primary/5"
+            >
+              <Download className="size-4" /> Unduh Template Excel (.xlsx)
             </Button>
             {fileName ? (
               <span className="text-xs text-muted-foreground">
