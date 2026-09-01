@@ -20,5 +20,13 @@ export default defineConfig({
       host: "0.0.0.0",
       port: 3000,
     },
+    define: {
+      "import.meta.env.VITE_ADMIN_EMAIL": JSON.stringify(
+        process.env.ADMIN_EMAIL?.replace(/['"]/g, "") || "admin@acc.co.id",
+      ),
+      "import.meta.env.VITE_ADMIN_PASSWORD": JSON.stringify(
+        process.env.ADMIN_PASSWORD?.replace(/['"]/g, "") || "password123",
+      ),
+    },
   },
 });

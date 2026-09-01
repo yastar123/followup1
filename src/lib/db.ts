@@ -68,9 +68,9 @@ export type DbState = {
 
 const DB_FILE_PATH = path.join(process.cwd(), "acc_db.json");
 
-// Default initial state matching the seed data in store.tsx
+// Default initial state with clean database and single admin account
 const initialSeedData: DbState = {
-  customers: [], // Will be populated by seeds if empty
+  customers: [],
   followUps: [],
   templates: [
     {
@@ -85,21 +85,16 @@ const initialSeedData: DbState = {
     },
   ],
   accounts: [
-    { id: "a1", name: "Rio Saputra", email: "rio@acc.co.id", role: "sales", active: true },
-    { id: "a2", name: "Nadia Larasati", email: "nadia@acc.co.id", role: "sales", active: true },
-    { id: "a3", name: "Admin Utama", email: "admin@acc.co.id", role: "admin", active: true },
-  ],
-  notes: [
     {
-      id: "n1",
-      title: "Catatan harian",
-      body: "Prioritaskan follow up pengajuan Prioritas Dana dan Mobil Baru minggu ini.",
-      by: "Sales · Rio",
-      createdAt: new Date("2026-08-10T02:00:00Z").toISOString(),
-      updatedAt: new Date("2026-08-10T02:00:00Z").toISOString(),
+      id: "a_admin",
+      name: "Admin Utama",
+      email: (process.env.ADMIN_EMAIL || "admin@acc.co.id").replace(/['"]/g, "").trim(),
+      role: "admin",
+      active: true,
     },
   ],
-  sheetUrl: "https://docs.google.com/spreadsheets/d/1ACCLeadsDemo/edit",
+  notes: [],
+  sheetUrl: "",
 };
 
 let pgClient: Client | null = null;

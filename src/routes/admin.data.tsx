@@ -275,8 +275,8 @@ function DataPage() {
                 2. Bagi customer ke sales (per rentang)
               </h2>
               <p className="mt-1 text-xs text-muted-foreground">
-                Contoh: customer 1–50 ke Rio, 51–120 ke Nadia. Ditugaskan: {assignedCount} dari{" "}
-                {staged.length}.
+                Contoh: customer 1–50 ke Sales 1, 51–120 ke Sales 2. Ditugaskan: {assignedCount}{" "}
+                dari {staged.length}.
               </p>
               <div className="mt-4 grid gap-3 sm:grid-cols-[1fr_1fr_1.4fr_auto] sm:items-end">
                 <div className="space-y-1.5">

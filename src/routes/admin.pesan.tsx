@@ -65,7 +65,7 @@ const contohCustomer: Customer = {
   value: 0,
   source: "Excel · OPEN",
   status: "Baru",
-  owner: "Rio Saputra",
+  owner: "Sales ACC",
   note: "",
   createdAt: new Date(0).toISOString(),
 };
@@ -75,7 +75,7 @@ function PesanPage() {
   const [name, setName] = useState("");
   const [body, setBody] = useState("Selamat pagi Bapak/Ibu {{nama}}, ");
 
-  const preview = useMemo(() => renderTemplate(body, contohCustomer, "Rio Saputra"), [body]);
+  const preview = useMemo(() => renderTemplate(body, contohCustomer, "Sales ACC"), [body]);
 
   const unknownVars = useMemo(() => {
     const known = new Set(TEMPLATE_VARS.map((v) => v.key));
@@ -277,7 +277,7 @@ function PesanPage() {
                   className="mt-3"
                 />
                 <p className="mt-2 whitespace-pre-wrap text-xs text-muted-foreground">
-                  Pratinjau: {renderTemplate(t.body, contohCustomer, "Rio Saputra")}
+                  Pratinjau: {renderTemplate(t.body, contohCustomer, "Sales ACC")}
                 </p>
               </div>
             ))}

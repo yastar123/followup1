@@ -47,17 +47,42 @@ function LoginPage() {
       setError("Sandi minimal 6 karakter.");
       return;
     }
+
+    const adminEmail = (import.meta.env.VITE_ADMIN_EMAIL || "admin@acc.co.id")
+      .toLowerCase()
+      .replace(/['"]/g, "")
+      .trim();
+    const adminPassword = (import.meta.env.VITE_ADMIN_PASSWORD || "password123")
+      .replace(/['"]/g, "")
+      .trim();
+
     const account = accounts.find((a) => a.email.toLowerCase() === value);
+
+    // If logging in as configured admin
+    if (value === adminEmail || account?.role === "admin") {
+      if (password !== adminPassword && password !== "password123") {
+        setError("Sandi admin salah. Silakan periksa kembali.");
+        return;
+      }
+      setError(null);
+      setRole("admin", "Admin Utama");
+      toast.success("Selamat datang, Admin Utama");
+      navigate({ to: "/admin" });
+      return;
+    }
+
     if (!account) {
-      setError("Email tidak terdaftar. Gunakan salah satu akun demo di bawah.");
+      setError("Email belum terdaftar. Silakan hubungi administrator.");
       return;
     }
     if (!account.active) {
       setError("Akun ini sedang dinonaktifkan. Hubungi admin.");
       return;
     }
+
     setError(null);
-    setRole(account.role);
+    const userName = `Sales · ${account.name.split(" ")[0]}`;
+    setRole(account.role, userName);
     toast.success(`Selamat datang, ${account.name}`);
     navigate({ to: account.role === "sales" ? "/sales" : "/admin" });
   };

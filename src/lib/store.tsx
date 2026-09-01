@@ -73,181 +73,11 @@ type State = {
   impersonating?: boolean;
 };
 
-const rawSeed: Array<
-  [
-    string,
-    string,
-    string,
-    string,
-    string,
-    string,
-    string,
-    string,
-    number,
-    string,
-    Customer["status"],
-  ]
-> = [
-  [
-    "Rani Wijaya",
-    "6281234567801",
-    "Jakarta",
-    "Dealer Honda Jakarta",
-    "Mobil Baru — Honda Brio RS",
-    "Retail",
-    "ACC-2026-0101",
-    "Cabang Jakarta Selatan",
-    198000000,
-    "ACC ONE App",
-    "Baru",
-  ],
-  [
-    "Bagas Prasetyo",
-    "6281234567802",
-    "Bandung",
-    "Dealer Daihatsu Bandung",
-    "Mobil Bekas — Daihatsu Xenia 1.3 R",
-    "Retail",
-    "ACC-2026-0102",
-    "Cabang Bandung",
-    132500000,
-    "Instagram Ads",
-    "Proses",
-  ],
-  [
-    "Sinta Ayu",
-    "6281234567803",
-    "Surabaya",
-    "Dealer Toyota Surabaya",
-    "Mobil Baru — Toyota Avanza 1.3 G",
-    "Retail",
-    "ACC-2026-0103",
-    "Cabang Surabaya",
-    214000000,
-    "Referral",
-    "Tertarik",
-  ],
-  [
-    "Dimas Ardhi",
-    "6281234567804",
-    "Semarang",
-    "Ardhi Logistik",
-    "ACC Danaku — Jaminan BPKB Mobil",
-    "Fasilitas Dana",
-    "ACC-2026-0104",
-    "Cabang Semarang",
-    85000000,
-    "Website ACC",
-    "Proses",
-  ],
-  [
-    "Lestari Putri",
-    "6281234567805",
-    "Yogyakarta",
-    "Dealer Suzuki Sleman",
-    "Syariah Mobil Bekas — Suzuki Ertiga GX",
-    "Syariah",
-    "ACC-2026-0105",
-    "Cabang Yogyakarta",
-    156000000,
-    "Walk-in Cabang",
-    "Tidak Tertarik",
-  ],
-  [
-    "Hendra Gunawan",
-    "6281234567806",
-    "Medan",
-    "Dealer Mitsubishi Medan",
-    "Mobil Baru — Mitsubishi Xpander Cross",
-    "Fleet",
-    "ACC-2026-0106",
-    "Cabang Medan",
-    285000000,
-    "ACC ONE App",
-    "Closing",
-  ],
-  [
-    "Maya Kartika",
-    "6281234567807",
-    "Denpasar",
-    "Villa Kartika",
-    "Prioritas Dana — Jaminan BPKB",
-    "Prioritas",
-    "ACC-2026-0107",
-    "Cabang Denpasar",
-    250000000,
-    "Referral",
-    "Tertarik",
-  ],
-  [
-    "Yusuf Rahman",
-    "6281234567808",
-    "Makassar",
-    "Rahman Seafood",
-    "ACC Syariah Haji",
-    "Syariah",
-    "ACC-2026-0108",
-    "Cabang Makassar",
-    35000000,
-    "Website ACC",
-    "Baru",
-  ],
-];
-
-const seedCustomers: Customer[] = rawSeed.map(
-  (
-    [name, phone, city, company, unit, segment, contractNumber, region, value, source, status],
-    i,
-  ) => ({
-    id: `c${i + 1}`,
-    name,
-    phone,
-    city,
-    company,
-    product: unit,
-    unit,
-    segment,
-    contractNumber,
-    region,
-    value,
-    source,
-    status,
-    owner: i % 2 === 0 ? "Sales · Rio" : "Sales · Nadia",
-    note: "Lead masuk dari rekap spreadsheet mingguan.",
-    createdAt: new Date(Date.now() - (i + 1) * 3 * 864e5).toISOString(),
-  }),
-);
-
-const seedFollowUps: FollowUp[] = [
-  {
-    id: "f1",
-    customerId: "c3",
-    channel: "WhatsApp",
-    outcome: "Chat dibalas",
-    interest: "Tertarik",
-    reason: "Minta simulasi angsuran Avanza dengan DP 25%, dokumen KTP & KK sudah siap.",
-    nextAction: "Kirim simulasi kredit besok pagi",
-    by: "Sales · Rio",
-    at: new Date(Date.now() - 864e5).toISOString(),
-  },
-  {
-    id: "f2",
-    customerId: "c5",
-    channel: "Telepon",
-    outcome: "Telepon dijawab",
-    interest: "Tidak Tertarik",
-    reason: "Sudah dapat pembiayaan dari leasing lain, minta dihubungi lagi tahun depan.",
-    nextAction: "Follow up 3 bulan lagi",
-    by: "Sales · Nadia",
-    at: new Date(Date.now() - 2 * 864e5).toISOString(),
-  },
-];
-
 const initial: State = {
   role: null,
-  user: "Sales · Rio",
-  customers: seedCustomers,
-  followUps: seedFollowUps,
+  user: "Admin Utama",
+  customers: [],
+  followUps: [],
   templates: [
     {
       id: "t1",
@@ -261,27 +91,22 @@ const initial: State = {
     },
   ],
   accounts: [
-    { id: "a1", name: "Rio Saputra", email: "rio@acc.co.id", role: "sales", active: true },
-    { id: "a2", name: "Nadia Larasati", email: "nadia@acc.co.id", role: "sales", active: true },
-    { id: "a3", name: "Admin Utama", email: "admin@acc.co.id", role: "admin", active: true },
-  ],
-  notes: [
     {
-      id: "n1",
-      title: "Catatan harian",
-      body: "Prioritaskan follow up pengajuan Prioritas Dana dan Mobil Baru minggu ini.",
-      by: "Sales · Rio",
-      createdAt: new Date("2026-08-10T02:00:00Z").toISOString(),
-      updatedAt: new Date("2026-08-10T02:00:00Z").toISOString(),
+      id: "a_admin",
+      name: "Admin Utama",
+      email: (import.meta.env.VITE_ADMIN_EMAIL || "admin@acc.co.id").replace(/['"]/g, "").trim(),
+      role: "admin",
+      active: true,
     },
   ],
-  sheetUrl: "https://docs.google.com/spreadsheets/d/1ACCLeadsDemo/edit",
+  notes: [],
+  sheetUrl: "",
   impersonating: false,
 };
 
 type Ctx = State & {
   dbStatus: { type: "PostgreSQL" | "File System" | "Local Cache"; connected: boolean };
-  setRole: (r: Role | null) => void;
+  setRole: (r: Role | null, userName?: string) => void;
   impersonate: (user: string) => void;
   stopImpersonate: () => void;
   addFollowUp: (f: Omit<FollowUp, "id" | "at" | "by">) => void;
@@ -298,7 +123,7 @@ type Ctx = State & {
 };
 
 const StoreContext = createContext<Ctx | null>(null);
-const KEY = "acc-followup-state-v1";
+const KEY = "acc-followup-state-v2";
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<State>(initial);
@@ -312,8 +137,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => {
-    // 1. Initial load from local storage cache for instant rendering
+    // 1. Clear obsolete v1 demo cache & load fresh local cache
     try {
+      localStorage.removeItem("acc-followup-state-v1");
       const raw = localStorage.getItem(KEY);
       if (raw) setState({ ...initial, ...JSON.parse(raw) });
     } catch {
@@ -333,14 +159,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         return res.json();
       })
       .then((serverState) => {
-        if (
-          serverState &&
-          (serverState.customers?.length > 0 || serverState.followUps?.length > 0)
-        ) {
+        if (serverState && Array.isArray(serverState.accounts)) {
           setState((prev) => ({ ...prev, ...serverState }));
           setIsLoaded(true);
         } else {
-          // If server database is unseeded, seed it with the current seed data
+          // If server database is unseeded, initialize it
           fetch("/api/state", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -385,11 +208,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     () => ({
       ...state,
       dbStatus,
-      setRole: (role) =>
+      setRole: (role, userName) =>
         patch((s) => ({
           ...s,
           role,
-          user: role === "admin" ? "Admin Utama" : "Sales · Rio",
+          user: userName || (role === "admin" ? "Admin Utama" : "Petugas Sales"),
           impersonating: false,
         })),
       impersonate: (user) => patch((s) => ({ ...s, role: "sales", user, impersonating: true })),
