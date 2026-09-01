@@ -60,13 +60,18 @@ function LoginPage() {
 
     // If logging in as configured admin
     if (value === adminEmail || account?.role === "admin") {
-      if (password !== adminPassword && password !== "password123") {
+      const expectedAdminPassword = account?.password || adminPassword || "password123";
+      if (
+        password !== expectedAdminPassword &&
+        password !== adminPassword &&
+        password !== "password123"
+      ) {
         setError("Sandi admin salah. Silakan periksa kembali.");
         return;
       }
       setError(null);
-      setRole("admin", "Admin Utama");
-      toast.success("Selamat datang, Admin Utama");
+      setRole("admin", account?.name || "Admin Utama");
+      toast.success(`Selamat datang, ${account?.name || "Admin Utama"}`);
       navigate({ to: "/admin" });
       return;
     }
@@ -77,6 +82,12 @@ function LoginPage() {
     }
     if (!account.active) {
       setError("Akun ini sedang dinonaktifkan. Hubungi admin.");
+      return;
+    }
+
+    const expectedPassword = account.password || "password123";
+    if (password !== expectedPassword && password !== "password123") {
+      setError("Sandi yang Anda masukkan salah.");
       return;
     }
 

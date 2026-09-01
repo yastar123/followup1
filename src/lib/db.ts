@@ -256,6 +256,7 @@ export async function initPgTables() {
         email TEXT NOT NULL,
         role TEXT DEFAULT 'sales',
         active BOOLEAN DEFAULT true,
+        password TEXT DEFAULT 'password123',
         phone TEXT DEFAULT '',
         note TEXT DEFAULT '',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -264,6 +265,7 @@ export async function initPgTables() {
 
     // Ensure account columns exist
     const alterAccountCols = [
+      "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS password TEXT DEFAULT 'password123'",
       "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS phone TEXT DEFAULT ''",
       "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS note TEXT DEFAULT ''",
       "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
@@ -477,13 +479,14 @@ export async function writeDb(state: DbState): Promise<boolean> {
         }
         for (const a of state.accounts) {
           await client.query(
-            `INSERT INTO accounts (id, name, email, role, active, phone, note, created_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+            `INSERT INTO accounts (id, name, email, role, active, password, phone, note, created_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
              ON CONFLICT (id) DO UPDATE SET
                name = EXCLUDED.name,
                email = EXCLUDED.email,
                role = EXCLUDED.role,
                active = EXCLUDED.active,
+               password = EXCLUDED.password,
                phone = EXCLUDED.phone,
                note = EXCLUDED.note,
                created_at = EXCLUDED.created_at`,
@@ -493,6 +496,7 @@ export async function writeDb(state: DbState): Promise<boolean> {
               a.email,
               a.role,
               a.active,
+              a.password || "password123",
               a.phone || "",
               a.note || "",
               a.createdAt || new Date().toISOString(),

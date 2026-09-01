@@ -16,6 +16,11 @@ import {
   CheckCircle2,
   Calendar,
   Layers,
+  Lock,
+  Eye,
+  EyeOff,
+  KeyRound,
+  Copy,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
@@ -107,6 +112,9 @@ function AkunPage() {
   const [formRole, setFormRole] = useState<Role>("sales");
   const [formActive, setFormActive] = useState(true);
   const [formNote, setFormNote] = useState("");
+  const [formPassword, setFormPassword] = useState("");
+  const [showFormPassword, setShowFormPassword] = useState(false);
+  const [visiblePasswords, setVisiblePasswords] = useState<Record<string, boolean>>({});
   const [isSaving, setIsSaving] = useState(false);
 
   // Filtered Accounts
@@ -151,6 +159,18 @@ function AkunPage() {
     return counts;
   }, [customers]);
 
+  // Helper to generate a random password
+  const generateRandomPassword = () => {
+    const chars = "abcdefghjkmnpqrstuvwxyz23456789";
+    let res = "acc";
+    for (let i = 0; i < 5; i++) {
+      res += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    setFormPassword(res);
+    setShowFormPassword(true);
+    toast.info(`Sandi acak dibuat: ${res}`);
+  };
+
   // Open Create Modal
   const handleOpenAdd = () => {
     setFormName("");
@@ -159,6 +179,8 @@ function AkunPage() {
     setFormRole("sales");
     setFormActive(true);
     setFormNote("");
+    setFormPassword("acc12345");
+    setShowFormPassword(false);
     setIsAddOpen(true);
   };
 
@@ -171,6 +193,8 @@ function AkunPage() {
     setFormRole(account.role);
     setFormActive(account.active);
     setFormNote(account.note || "");
+    setFormPassword(account.password || "password123");
+    setShowFormPassword(false);
     setIsEditOpen(true);
   };
 
@@ -185,6 +209,7 @@ function AkunPage() {
     e.preventDefault();
     const cleanName = formName.trim();
     const cleanEmail = formEmail.trim().toLowerCase();
+    const cleanPassword = formPassword.trim() || "acc12345";
 
     if (!cleanName) {
       toast.error("Nama lengkap wajib diisi.");
@@ -192,6 +217,10 @@ function AkunPage() {
     }
     if (!cleanEmail || !cleanEmail.includes("@")) {
       toast.error("Email tidak valid.");
+      return;
+    }
+    if (cleanPassword.length < 6) {
+      toast.error("Sandi minimal 6 karakter.");
       return;
     }
 
@@ -210,6 +239,7 @@ function AkunPage() {
         phone: formPhone.trim(),
         role: formRole,
         active: formActive,
+        password: cleanPassword,
         note: formNote.trim(),
         createdAt: new Date().toISOString(),
       });
@@ -232,6 +262,7 @@ function AkunPage() {
 
     const cleanName = formName.trim();
     const cleanEmail = formEmail.trim().toLowerCase();
+    const cleanPassword = formPassword.trim() || selectedAccount.password || "password123";
 
     if (!cleanName) {
       toast.error("Nama lengkap wajib diisi.");
@@ -239,6 +270,10 @@ function AkunPage() {
     }
     if (!cleanEmail || !cleanEmail.includes("@")) {
       toast.error("Email tidak valid.");
+      return;
+    }
+    if (cleanPassword.length < 6) {
+      toast.error("Sandi minimal 6 karakter.");
       return;
     }
 
@@ -259,6 +294,7 @@ function AkunPage() {
         phone: formPhone.trim(),
         role: formRole,
         active: formActive,
+        password: cleanPassword,
         note: formNote.trim(),
       });
       await syncNow();
@@ -514,22 +550,57 @@ function AkunPage() {
                           </div>
                         </td>
 
-                        {/* Email & Phone */}
+                        {/* Email, Phone & Password */}
                         <td className="px-4 py-3.5 space-y-1">
                           <div className="flex items-center gap-1.5 text-foreground font-mono">
-                            <Mail className="size-3 text-muted-foreground" />
+                            <Mail className="size-3 text-muted-foreground shrink-0" />
                             <span>{a.email}</span>
                           </div>
                           {a.phone ? (
                             <div className="flex items-center gap-1.5 text-muted-foreground">
-                              <Phone className="size-3 text-muted-foreground" />
+                              <Phone className="size-3 text-muted-foreground shrink-0" />
                               <span>{a.phone}</span>
                             </div>
                           ) : (
-                            <span className="text-[11px] text-muted-foreground/60 italic">
-                              Belum ada No HP
-                            </span>
+                            <div className="flex items-center gap-1.5 text-[11px] text-muted-foreground/60 italic">
+                              <Phone className="size-3 text-muted-foreground/40 shrink-0" />
+                              <span>Belum ada No HP</span>
+                            </div>
                           )}
+                          <div className="flex items-center gap-1.5 text-muted-foreground">
+                            <Lock className="size-3 text-muted-foreground shrink-0" />
+                            <span className="font-mono text-[11px] font-medium text-foreground">
+                              {visiblePasswords[a.id] ? a.password || "password123" : "••••••••"}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                setVisiblePasswords((prev) => ({
+                                  ...prev,
+                                  [a.id]: !prev[a.id],
+                                }))
+                              }
+                              className="text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors"
+                              title={visiblePasswords[a.id] ? "Sembunyikan Sandi" : "Lihat Sandi"}
+                            >
+                              {visiblePasswords[a.id] ? (
+                                <EyeOff className="size-3 text-amber-600 dark:text-amber-400" />
+                              ) : (
+                                <Eye className="size-3" />
+                              )}
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                navigator.clipboard.writeText(a.password || "password123");
+                                toast.success(`Sandi untuk ${a.name} berhasil disalin!`);
+                              }}
+                              className="text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors"
+                              title="Salin Sandi ke Clipboard"
+                            >
+                              <Copy className="size-3" />
+                            </button>
+                          </div>
                         </td>
 
                         {/* Role Badge */}
@@ -637,6 +708,15 @@ function AkunPage() {
                                   <Pencil className="size-3.5" /> Edit Data
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
+                                  onClick={() => {
+                                    navigator.clipboard.writeText(a.password || "password123");
+                                    toast.success(`Sandi untuk ${a.name} berhasil disalin!`);
+                                  }}
+                                  className="gap-2"
+                                >
+                                  <Copy className="size-3.5" /> Salin Sandi
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
                                   onClick={() => handleToggle(a.id, a.name, a.active)}
                                   className="gap-2"
                                 >
@@ -714,6 +794,45 @@ function AkunPage() {
                   placeholder="rian.prasetyo@acc.co.id"
                   required
                 />
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="add-password" className="text-xs font-semibold">
+                    Kata Sandi / Password <span className="text-destructive">*</span>
+                  </Label>
+                  <button
+                    type="button"
+                    onClick={generateRandomPassword}
+                    className="text-[11px] text-primary hover:underline flex items-center gap-1 font-medium"
+                  >
+                    <KeyRound className="size-3" /> Buat Sandi Acak
+                  </button>
+                </div>
+                <div className="relative">
+                  <Lock className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    id="add-password"
+                    type={showFormPassword ? "text" : "password"}
+                    value={formPassword}
+                    onChange={(e) => setFormPassword(e.target.value)}
+                    placeholder="Minimal 6 karakter"
+                    className="pl-9 pr-10 font-mono text-xs"
+                    required
+                    minLength={6}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowFormPassword(!showFormPassword)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
+                    title={showFormPassword ? "Sembunyikan Sandi" : "Lihat Sandi"}
+                  >
+                    {showFormPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Sandi ini digunakan oleh pengguna untuk masuk ke dashboard sistem ACC One.
+                </p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -818,6 +937,35 @@ function AkunPage() {
                   onChange={(e) => setFormEmail(e.target.value)}
                   required
                 />
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="edit-password" className="text-xs font-semibold">
+                  Kata Sandi / Password Baru
+                </Label>
+                <div className="relative">
+                  <Lock className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    id="edit-password"
+                    type={showFormPassword ? "text" : "password"}
+                    value={formPassword}
+                    onChange={(e) => setFormPassword(e.target.value)}
+                    placeholder="Minimal 6 karakter"
+                    className="pl-9 pr-10 font-mono text-xs"
+                    minLength={6}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowFormPassword(!showFormPassword)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
+                    title={showFormPassword ? "Sembunyikan Sandi" : "Lihat Sandi"}
+                  >
+                    {showFormPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Dapat diperbarui langsung atau biarkan jika tidak ingin mengubah sandi.
+                </p>
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">

@@ -64,6 +64,7 @@ export type Account = {
   email: string;
   role: Role;
   active: boolean;
+  password?: string;
   phone?: string;
   note?: string;
   createdAt?: string;
@@ -114,6 +115,7 @@ const initial: State = {
       email: (import.meta.env.VITE_ADMIN_EMAIL || "admin@acc.co.id").replace(/['"]/g, "").trim(),
       role: "admin",
       active: true,
+      password: (import.meta.env.VITE_ADMIN_PASSWORD || "password123").replace(/['"]/g, "").trim(),
     },
   ],
   notes: [],

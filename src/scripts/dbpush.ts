@@ -130,12 +130,16 @@ async function runDbPush() {
         email TEXT NOT NULL,
         role TEXT DEFAULT 'sales',
         active BOOLEAN DEFAULT true,
+        password TEXT DEFAULT 'password123',
         phone TEXT DEFAULT '',
         note TEXT DEFAULT '',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
     try {
+      await client.query(
+        "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS password TEXT DEFAULT 'password123'",
+      );
       await client.query("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS phone TEXT DEFAULT ''");
       await client.query("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS note TEXT DEFAULT ''");
       await client.query(
