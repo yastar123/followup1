@@ -130,7 +130,11 @@ type Ctx = State & {
   impersonate: (user: string) => void;
   stopImpersonate: () => void;
   addFollowUp: (f: Omit<FollowUp, "id" | "at" | "by">) => void;
+  addCustomer: (c: Omit<Customer, "id"> & { id?: string }) => void;
   updateCustomer: (id: string, patch: Partial<Customer>) => void;
+  removeCustomer: (id: string) => void;
+  deleteCustomers: (ids: string[]) => void;
+  clearAllCustomers: () => void;
   addCustomers: (c: Customer[]) => void;
   saveTemplate: (t: Template) => void;
   removeTemplate: (id: string) => void;
@@ -306,10 +310,37 @@ export function StoreProvider({ children }: { children: ReactNode }) {
             };
           }),
         })),
+      addCustomer: (c) =>
+        patch((s) => ({
+          ...s,
+          customers: [
+            {
+              ...c,
+              id: c.id || `c${Date.now()}`,
+              createdAt: c.createdAt || new Date().toISOString(),
+            },
+            ...s.customers,
+          ],
+        })),
       updateCustomer: (id, p) =>
         patch((s) => ({
           ...s,
           customers: s.customers.map((c) => (c.id === id ? { ...c, ...p } : c)),
+        })),
+      removeCustomer: (id) =>
+        patch((s) => ({
+          ...s,
+          customers: s.customers.filter((c) => c.id !== id),
+        })),
+      deleteCustomers: (ids) =>
+        patch((s) => ({
+          ...s,
+          customers: s.customers.filter((c) => !ids.includes(c.id)),
+        })),
+      clearAllCustomers: () =>
+        patch((s) => ({
+          ...s,
+          customers: [],
         })),
       addCustomers: (list) =>
         patch((s) => ({
