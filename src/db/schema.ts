@@ -49,6 +49,9 @@ export const accounts = pgTable("accounts", {
   email: text("email").notNull(),
   role: text("role").default("sales"),
   active: boolean("active").default(true),
+  phone: text("phone").default(""),
+  note: text("note").default(""),
+  createdAt: timestamp("created_at").defaultNow(),
 });
 
 export const notes = pgTable("notes", {

@@ -255,9 +255,26 @@ export async function initPgTables() {
         name TEXT NOT NULL,
         email TEXT NOT NULL,
         role TEXT DEFAULT 'sales',
-        active BOOLEAN DEFAULT true
+        active BOOLEAN DEFAULT true,
+        phone TEXT DEFAULT '',
+        note TEXT DEFAULT '',
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
+    // Ensure account columns exist
+    const alterAccountCols = [
+      "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS phone TEXT DEFAULT ''",
+      "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS note TEXT DEFAULT ''",
+      "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP",
+    ];
+    for (const sql of alterAccountCols) {
+      try {
+        await pgClient.query(sql);
+      } catch {
+        /* ignore */
+      }
+    }
 
     // 5. Create notes table
     await pgClient.query(`
@@ -452,16 +469,34 @@ export async function writeDb(state: DbState): Promise<boolean> {
       }
 
       if (Array.isArray(state.accounts)) {
+        const accountIds = state.accounts.map((a) => a.id).filter(Boolean);
+        if (accountIds.length > 0) {
+          await client.query(`DELETE FROM accounts WHERE NOT (id = ANY($1::text[]))`, [accountIds]);
+        } else {
+          await client.query(`DELETE FROM accounts`);
+        }
         for (const a of state.accounts) {
           await client.query(
-            `INSERT INTO accounts (id, name, email, role, active)
-             VALUES ($1, $2, $3, $4, $5)
+            `INSERT INTO accounts (id, name, email, role, active, phone, note, created_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
              ON CONFLICT (id) DO UPDATE SET
                name = EXCLUDED.name,
                email = EXCLUDED.email,
                role = EXCLUDED.role,
-               active = EXCLUDED.active`,
-            [a.id, a.name, a.email, a.role, a.active],
+               active = EXCLUDED.active,
+               phone = EXCLUDED.phone,
+               note = EXCLUDED.note,
+               created_at = EXCLUDED.created_at`,
+            [
+              a.id,
+              a.name,
+              a.email,
+              a.role,
+              a.active,
+              a.phone || "",
+              a.note || "",
+              a.createdAt || new Date().toISOString(),
+            ],
           );
         }
       }

@@ -58,7 +58,16 @@ export type FollowUp = {
 
 export type Template = { id: string; name: string; body: string };
 
-export type Account = { id: string; name: string; email: string; role: Role; active: boolean };
+export type Account = {
+  id: string;
+  name: string;
+  email: string;
+  role: Role;
+  active: boolean;
+  phone?: string;
+  note?: string;
+  createdAt?: string;
+};
 
 export type Note = {
   id: string;
@@ -124,6 +133,8 @@ type Ctx = State & {
   saveTemplate: (t: Template) => void;
   removeTemplate: (id: string) => void;
   addAccount: (a: Omit<Account, "id">) => void;
+  updateAccount: (id: string, patch: Partial<Omit<Account, "id">>) => void;
+  removeAccount: (id: string) => void;
   toggleAccount: (id: string) => void;
   addNote: (n: { title: string; body: string }) => void;
   updateNote: (id: string, patch: { title: string; body: string }) => void;
@@ -316,7 +327,23 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       removeTemplate: (id) =>
         patch((s) => ({ ...s, templates: s.templates.filter((t) => t.id !== id) })),
       addAccount: (a) =>
-        patch((s) => ({ ...s, accounts: [...s.accounts, { ...a, id: `a${Date.now()}` }] })),
+        patch((s) => ({
+          ...s,
+          accounts: [
+            ...s.accounts,
+            { ...a, id: `a${Date.now()}`, createdAt: a.createdAt || new Date().toISOString() },
+          ],
+        })),
+      updateAccount: (id, p) =>
+        patch((s) => ({
+          ...s,
+          accounts: s.accounts.map((a) => (a.id === id ? { ...a, ...p } : a)),
+        })),
+      removeAccount: (id) =>
+        patch((s) => ({
+          ...s,
+          accounts: s.accounts.filter((a) => a.id !== id),
+        })),
       toggleAccount: (id) =>
         patch((s) => ({
           ...s,
