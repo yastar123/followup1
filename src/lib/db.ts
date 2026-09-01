@@ -102,7 +102,7 @@ let isPgConnected = false;
 
 // Check if PostgreSQL environment variables are defined and try to connect
 async function getPgClient(): Promise<Client | null> {
-  if (pgClient) return pgClient;
+  if (pgClient && isPgConnected) return pgClient;
 
   let connectionString = process.env.DATABASE_URL || process.env.PG_CONN_STR;
   if (connectionString) {
@@ -111,28 +111,35 @@ async function getPgClient(): Promise<Client | null> {
 
   const pgHost = process.env.PGHOST;
 
-  // If connectionString or pgHost is "base", it is a placeholder from the hosting platform
-  const hasPostgres =
-    (connectionString && connectionString !== "base" && !connectionString.includes("localhost")) ||
-    (pgHost && pgHost !== "base" && pgHost !== "localhost");
+  // Check if valid connection details exist (accepting localhost or remote)
+  const hasPostgres = Boolean(
+    (connectionString && connectionString !== "base" && connectionString.trim().length > 0) ||
+    (pgHost && pgHost !== "base" && pgHost.trim().length > 0),
+  );
 
   if (!hasPostgres) {
     console.log(
-      "No PostgreSQL environment variables configured or using localhost on cloud environment. Running with file-based database.",
+      "No PostgreSQL environment variables configured. Running with file-based database.",
     );
     return null;
   }
 
   try {
+    const isLocal =
+      connectionString?.includes("localhost") ||
+      connectionString?.includes("127.0.0.1") ||
+      pgHost === "localhost" ||
+      pgHost === "127.0.0.1";
+
     const config = connectionString
-      ? { connectionString, ssl: { rejectUnauthorized: false } }
+      ? { connectionString, ssl: isLocal ? false : { rejectUnauthorized: false } }
       : {
-          host: pgHost,
-          user: process.env.PGUSER,
-          password: process.env.PGPASSWORD,
-          database: process.env.PGDATABASE,
+          host: pgHost || "localhost",
+          user: process.env.PGUSER || "postgres",
+          password: process.env.PGPASSWORD || "",
+          database: process.env.PGDATABASE || "postgres",
           port: Number(process.env.PGPORT) || 5432,
-          ssl: { rejectUnauthorized: false },
+          ssl: isLocal ? false : { rejectUnauthorized: false },
         };
 
     pgClient = new Client(config);
@@ -167,7 +174,7 @@ async function initPgTables() {
         region TEXT DEFAULT '',
         value INTEGER DEFAULT 0,
         source TEXT DEFAULT '',
-        status TEXT DEFAULT 'Prospect',
+        status TEXT DEFAULT 'Baru',
         owner TEXT DEFAULT '',
         note TEXT DEFAULT '',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -272,12 +279,84 @@ export async function writeDb(state: DbState): Promise<boolean> {
   if (client && isPgConnected) {
     try {
       const jsonStr = JSON.stringify(state);
+      // 1. Update master state table
       await client.query(
         `INSERT INTO acc_app_state (key, value, updated_at) 
          VALUES ('full_state', $1, CURRENT_TIMESTAMP)
          ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = CURRENT_TIMESTAMP`,
         [jsonStr],
       );
+
+      // 2. Also sync to individual relational tables
+      if (Array.isArray(state.customers)) {
+        for (const c of state.customers) {
+          await client.query(
+            `INSERT INTO customers (id, name, phone, city, company, product, unit, segment, contract_number, region, value, source, status, owner, note)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+             ON CONFLICT (id) DO UPDATE SET
+               name = EXCLUDED.name,
+               phone = EXCLUDED.phone,
+               city = EXCLUDED.city,
+               company = EXCLUDED.company,
+               product = EXCLUDED.product,
+               unit = EXCLUDED.unit,
+               segment = EXCLUDED.segment,
+               contract_number = EXCLUDED.contract_number,
+               region = EXCLUDED.region,
+               value = EXCLUDED.value,
+               source = EXCLUDED.source,
+               status = EXCLUDED.status,
+               owner = EXCLUDED.owner,
+               note = EXCLUDED.note`,
+            [
+              c.id,
+              c.name,
+              c.phone,
+              c.city || "",
+              c.company || "",
+              c.product || "",
+              c.unit || "",
+              c.segment || "",
+              c.contractNumber || "",
+              c.region || "",
+              c.value || 0,
+              c.source || "",
+              c.status || "Baru",
+              c.owner || "",
+              c.note || "",
+            ],
+          );
+        }
+      }
+
+      if (Array.isArray(state.accounts)) {
+        for (const a of state.accounts) {
+          await client.query(
+            `INSERT INTO accounts (id, name, email, role, active)
+             VALUES ($1, $2, $3, $4, $5)
+             ON CONFLICT (id) DO UPDATE SET
+               name = EXCLUDED.name,
+               email = EXCLUDED.email,
+               role = EXCLUDED.role,
+               active = EXCLUDED.active`,
+            [a.id, a.name, a.email, a.role, a.active],
+          );
+        }
+      }
+
+      if (Array.isArray(state.templates)) {
+        for (const t of state.templates) {
+          await client.query(
+            `INSERT INTO templates (id, name, body)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (id) DO UPDATE SET
+               name = EXCLUDED.name,
+               body = EXCLUDED.body`,
+            [t.id, t.name, t.body],
+          );
+        }
+      }
+
       return true;
     } catch (err) {
       console.error("PostgreSQL write error, falling back to local file:", err);
