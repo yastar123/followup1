@@ -1,5 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, useDeferredValue } from "react";
 import {
   Download,
   FileSpreadsheet,
@@ -23,6 +23,10 @@ import {
   Sparkles,
   CheckSquare,
   AlertTriangle,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import { AppShell } from "@/components/AppShell";
@@ -248,12 +252,17 @@ function DataPage() {
   const [isSaving, setIsSaving] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // Search & Filter State for Active Customers Table
+  // Search, Filter & Pagination State for Active Customers Table
   const [searchQuery, setSearchQuery] = useState("");
+  const deferredSearch = useDeferredValue(searchQuery);
   const [filterStatus, setFilterStatus] = useState("Semua");
   const [filterSales, setFilterSales] = useState("Semua");
   const [filterSegment, setFilterSegment] = useState("Semua");
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
 
   // CRUD Dialog States
   const [isAddOpen, setIsAddOpen] = useState(false);
@@ -420,10 +429,10 @@ function DataPage() {
     }
   };
 
-  // Filtered Active Customers List
+  // Filtered Active Customers List (Using deferredSearch for zero-lag typing)
   const filteredCustomers = useMemo(() => {
+    const q = deferredSearch.toLowerCase().trim();
     return customers.filter((c) => {
-      const q = searchQuery.toLowerCase().trim();
       const matchSearch =
         !q ||
         c.name.toLowerCase().includes(q) ||
@@ -446,22 +455,50 @@ function DataPage() {
 
       return matchSearch && matchStatus && matchSales && matchSegment;
     });
-  }, [customers, searchQuery, filterStatus, filterSales, filterSegment]);
+  }, [customers, deferredSearch, filterStatus, filterSales, filterSegment]);
 
-  // Checkbox Selection Logic
-  const isAllSelected =
-    filteredCustomers.length > 0 && filteredCustomers.every((c) => selectedIds.includes(c.id));
+  // Reset page when filters or search change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [deferredSearch, filterStatus, filterSales, filterSegment, pageSize]);
+
+  // Pagination Calculations
+  const totalPages = Math.max(1, Math.ceil(filteredCustomers.length / pageSize));
+  const currentPageSafe = Math.min(Math.max(1, currentPage), totalPages);
+
+  const paginatedCustomers = useMemo(() => {
+    const start = (currentPageSafe - 1) * pageSize;
+    return filteredCustomers.slice(start, start + pageSize);
+  }, [filteredCustomers, currentPageSafe, pageSize]);
+
+  const startRow = (currentPageSafe - 1) * pageSize + 1;
+  const endRow = Math.min(currentPageSafe * pageSize, filteredCustomers.length);
+
+  // Fast Checkbox Selection Logic using Set for O(1) lookups
+  const selectedSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+
+  const isPageSelected = useMemo(() => {
+    if (paginatedCustomers.length === 0) return false;
+    return paginatedCustomers.every((c) => selectedSet.has(c.id));
+  }, [paginatedCustomers, selectedSet]);
+
+  const isAllSelected = useMemo(() => {
+    if (filteredCustomers.length === 0) return false;
+    return filteredCustomers.every((c) => selectedSet.has(c.id));
+  }, [filteredCustomers, selectedSet]);
 
   const toggleSelectAll = () => {
-    if (isAllSelected) {
-      setSelectedIds([]);
+    if (isPageSelected) {
+      const pageIdSet = new Set(paginatedCustomers.map((c) => c.id));
+      setSelectedIds((prev) => prev.filter((id) => !pageIdSet.has(id)));
     } else {
-      setSelectedIds(filteredCustomers.map((c) => c.id));
+      const newIds = new Set([...selectedIds, ...paginatedCustomers.map((c) => c.id)]);
+      setSelectedIds(Array.from(newIds));
     }
   };
 
   const toggleSelectOne = (id: string) => {
-    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+    setSelectedIds((prev) => (selectedSet.has(id) ? prev.filter((x) => x !== id) : [...prev, id]));
   };
 
   // CRUD Handlers
@@ -1225,11 +1262,19 @@ function DataPage() {
 
           {/* Table Active Customers */}
           {filteredCustomers.length > 0 ? (
-            <div className="mt-4">
-              {/* Mobile scroll hint */}
-              <p className="mb-2 block sm:hidden text-[11px] text-muted-foreground italic">
-                ← Geser layar ke samping untuk melihat seluruh data pelanggan →
-              </p>
+            <div className="mt-4 space-y-3">
+              {/* Mobile scroll hint & Page summary */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                <span className="italic">
+                  ← Geser layar ke samping untuk melihat seluruh data pelanggan →
+                </span>
+                <span>
+                  Menampilkan <strong className="text-foreground font-mono">{startRow}</strong>–
+                  <strong className="text-foreground font-mono">{endRow}</strong> dari{" "}
+                  <strong className="text-foreground font-mono">{filteredCustomers.length}</strong>{" "}
+                  customer
+                </span>
+              </div>
 
               <div className="max-h-[520px] overflow-x-auto overflow-y-auto rounded-lg border border-border shadow-xs">
                 <table className="w-full text-left text-xs whitespace-nowrap min-w-[1000px]">
@@ -1237,9 +1282,9 @@ function DataPage() {
                     <tr>
                       <th className="px-3 py-2.5 font-medium w-8">
                         <Checkbox
-                          checked={isAllSelected}
+                          checked={isPageSelected}
                           onCheckedChange={toggleSelectAll}
-                          aria-label="Pilih Semua"
+                          aria-label="Pilih Halaman Ini"
                         />
                       </th>
                       <th className="px-3 py-2.5 font-medium">#</th>
@@ -1259,8 +1304,9 @@ function DataPage() {
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-border">
-                    {filteredCustomers.map((c, i) => {
-                      const isChecked = selectedIds.includes(c.id);
+                    {paginatedCustomers.map((c, indexOnPage) => {
+                      const i = (currentPageSafe - 1) * pageSize + indexOnPage;
+                      const isChecked = selectedSet.has(c.id);
                       return (
                         <tr
                           key={c.id}
@@ -1367,6 +1413,87 @@ function DataPage() {
                     })}
                   </tbody>
                 </table>
+              </div>
+
+              {/* Pagination Bar */}
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-muted/30 p-3 rounded-lg border border-border text-xs">
+                <div className="flex items-center gap-3">
+                  <span className="text-muted-foreground">
+                    Baris <strong className="text-foreground font-mono">{startRow}</strong>–
+                    <strong className="text-foreground font-mono">{endRow}</strong> dari{" "}
+                    <strong className="text-foreground font-mono">
+                      {filteredCustomers.length}
+                    </strong>
+                  </span>
+                  <div className="flex items-center gap-1.5 ml-2">
+                    <span className="text-muted-foreground text-[11px]">Per halaman:</span>
+                    <Select
+                      value={String(pageSize)}
+                      onValueChange={(v) => {
+                        setPageSize(Number(v));
+                        setCurrentPage(1);
+                      }}
+                    >
+                      <SelectTrigger className="h-7 w-20 text-[11px] bg-background">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="25">25</SelectItem>
+                        <SelectItem value="50">50</SelectItem>
+                        <SelectItem value="100">100</SelectItem>
+                        <SelectItem value="250">250</SelectItem>
+                        <SelectItem value="500">500</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5">
+                  <span className="text-muted-foreground text-[11px] mr-1">
+                    Hal <strong className="text-foreground font-mono">{currentPageSafe}</strong> /{" "}
+                    <strong className="text-foreground font-mono">{totalPages}</strong>
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="size-7 p-0"
+                    disabled={currentPageSafe <= 1}
+                    onClick={() => setCurrentPage(1)}
+                    title="Halaman Pertama"
+                  >
+                    <ChevronsLeft className="size-3.5" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="size-7 p-0"
+                    disabled={currentPageSafe <= 1}
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    title="Halaman Sebelumnya"
+                  >
+                    <ChevronLeft className="size-3.5" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="size-7 p-0"
+                    disabled={currentPageSafe >= totalPages}
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    title="Halaman Selanjutnya"
+                  >
+                    <ChevronRight className="size-3.5" />
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="icon"
+                    className="size-7 p-0"
+                    disabled={currentPageSafe >= totalPages}
+                    onClick={() => setCurrentPage(totalPages)}
+                    title="Halaman Terakhir"
+                  >
+                    <ChevronsRight className="size-3.5" />
+                  </Button>
+                </div>
               </div>
             </div>
           ) : (
