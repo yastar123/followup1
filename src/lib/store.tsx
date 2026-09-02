@@ -150,7 +150,6 @@ type Ctx = State & {
 };
 
 const StoreContext = createContext<Ctx | null>(null);
-const KEY = "acc-followup-state-v3";
 
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<State>(initial);
@@ -163,43 +162,30 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   }, [state]);
 
   const [dbStatus, setDbStatus] = useState<{
-    type: "PostgreSQL" | "File System" | "Local Cache";
+    type: "PostgreSQL" | "File System" | "Server DB";
     connected: boolean;
   }>({
-    type: "Local Cache",
+    type: "Server DB",
     connected: false,
   });
 
   useEffect(() => {
-    // 1. Clear legacy caches & load local storage state first
-    let initialLocalState: State = initial;
+    // Purge old local storage caches to enforce 100% server DB single source of truth
     try {
       localStorage.removeItem("acc-followup-state-v1");
       localStorage.removeItem("acc-followup-state-v2");
-      const raw = localStorage.getItem(KEY);
-      if (raw) {
-        const parsed = JSON.parse(raw);
-        initialLocalState = {
-          ...initial,
-          ...parsed,
-          customers: Array.isArray(parsed.customers) ? parsed.customers : [],
-          followUps: Array.isArray(parsed.followUps) ? parsed.followUps : [],
-          notes: Array.isArray(parsed.notes) ? parsed.notes : [],
-        };
-        setState(initialLocalState);
-        stateRef.current = initialLocalState;
-      }
+      localStorage.removeItem("acc-followup-state-v3");
     } catch {
       /* ignore */
     }
 
-    // 2. Fetch live DB connection status
+    // 1. Fetch live DB connection status
     fetch("/api/db-status")
       .then((res) => res.json())
       .then((data) => setDbStatus(data))
       .catch((e) => console.warn("Failed to load db status", e));
 
-    // 3. Sync full state from backend (PostgreSQL / Server File)
+    // 2. Fetch full state directly from backend VPS server database
     fetch("/api/state")
       .then((res) => {
         if (!res.ok) throw new Error("HTTP error " + res.status);
@@ -207,59 +193,21 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       })
       .then((serverState) => {
         if (serverState && Array.isArray(serverState.accounts)) {
-          const serverCusts = Array.isArray(serverState.customers) ? serverState.customers : [];
-          const localCusts = Array.isArray(initialLocalState.customers)
-            ? initialLocalState.customers
-            : [];
-
-          let finalCusts = serverCusts;
-          let needUploadLocalToServer = false;
-          // If server database is empty but local storage has data (e.g. imported on this laptop),
-          // push local storage data to server database so mobile devices get it!
-          if (serverCusts.length === 0 && localCusts.length > 0) {
-            finalCusts = localCusts;
-            needUploadLocalToServer = true;
-          }
-
-          const next: State = {
-            ...initialLocalState,
+          const loadedState: State = {
+            ...initial,
             ...serverState,
-            customers: finalCusts,
-            followUps:
-              Array.isArray(serverState.followUps) && serverState.followUps.length > 0
-                ? serverState.followUps
-                : initialLocalState.followUps,
-            notes:
-              Array.isArray(serverState.notes) && serverState.notes.length > 0
-                ? serverState.notes
-                : initialLocalState.notes,
+            customers: Array.isArray(serverState.customers) ? serverState.customers : [],
+            followUps: Array.isArray(serverState.followUps) ? serverState.followUps : [],
+            notes: Array.isArray(serverState.notes) ? serverState.notes : [],
           };
-
-          setState(next);
-          stateRef.current = next;
-          try {
-            localStorage.setItem(KEY, JSON.stringify(next));
-          } catch {
-            /* ignore */
-          }
-
-          if (needUploadLocalToServer) {
-            fetch("/api/state", {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(next),
-            }).catch((err) => console.warn("Failed to push local state to server DB:", err));
-          }
-
-          setIsLoaded(true);
-          initialSyncDoneRef.current = true;
-        } else {
-          setIsLoaded(true);
-          initialSyncDoneRef.current = true;
+          setState(loadedState);
+          stateRef.current = loadedState;
         }
+        setIsLoaded(true);
+        initialSyncDoneRef.current = true;
       })
       .catch((err) => {
-        console.warn("Could not load state from backend database, using local storage cache:", err);
+        console.warn("Could not load state from VPS server database:", err);
         setIsLoaded(true);
         initialSyncDoneRef.current = true;
       });
@@ -267,21 +215,16 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!isLoaded || !initialSyncDoneRef.current) return;
-    try {
-      localStorage.setItem(KEY, JSON.stringify(state));
-    } catch {
-      /* ignore */
-    }
 
-    // Debounce backend state saves to protect connection pools
+    // Auto-save changes directly to VPS backend database (debounced 500ms)
     const timer = setTimeout(() => {
       if (!initialSyncDoneRef.current) return;
       fetch("/api/state", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(state),
-      }).catch((err) => console.warn("Auto-sync to backend database failed:", err));
-    }, 1000);
+      }).catch((err) => console.warn("Auto-sync to VPS database failed:", err));
+    }, 500);
 
     return () => clearTimeout(timer);
   }, [state, isLoaded]);
@@ -296,11 +239,6 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const syncNow = useCallback(async (customState?: State): Promise<boolean> => {
     const stateToSync = customState || stateRef.current;
     try {
-      localStorage.setItem(KEY, JSON.stringify(stateToSync));
-    } catch {
-      /* ignore */
-    }
-    try {
       const res = await fetch("/api/state", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -309,7 +247,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       const data = await res.json();
       return Boolean(data?.success || data?.ok);
     } catch (err) {
-      console.warn("Manual sync to backend database failed:", err);
+      console.warn("Direct sync to VPS backend database failed:", err);
       return false;
     }
   }, []);
