@@ -156,6 +156,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<State>(initial);
   const [isLoaded, setIsLoaded] = useState(false);
   const stateRef = useRef<State>(initial);
+  const initialSyncDoneRef = useRef(false);
 
   useEffect(() => {
     stateRef.current = state;
@@ -171,21 +172,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // 1. Clear legacy caches & load local storage state first
+    let initialLocalState: State = initial;
     try {
       localStorage.removeItem("acc-followup-state-v1");
       localStorage.removeItem("acc-followup-state-v2");
       const raw = localStorage.getItem(KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
-        const restored: State = {
+        initialLocalState = {
           ...initial,
           ...parsed,
           customers: Array.isArray(parsed.customers) ? parsed.customers : [],
           followUps: Array.isArray(parsed.followUps) ? parsed.followUps : [],
           notes: Array.isArray(parsed.notes) ? parsed.notes : [],
         };
-        setState(restored);
-        stateRef.current = restored;
+        setState(initialLocalState);
+        stateRef.current = initialLocalState;
       }
     } catch {
       /* ignore */
@@ -205,35 +207,66 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       })
       .then((serverState) => {
         if (serverState && Array.isArray(serverState.accounts)) {
-          setState((prev) => {
-            const serverCusts = Array.isArray(serverState.customers) ? serverState.customers : [];
-            const prevCusts = Array.isArray(prev.customers) ? prev.customers : [];
-            // Preserve local customers if server returned empty list to prevent accidental wipe on refresh
-            const finalCustomers = serverCusts.length > 0 ? serverCusts : prevCusts;
+          const serverCusts = Array.isArray(serverState.customers) ? serverState.customers : [];
+          const localCusts = Array.isArray(initialLocalState.customers)
+            ? initialLocalState.customers
+            : [];
 
-            const next: State = {
-              ...prev,
-              ...serverState,
-              customers: finalCustomers,
-              followUps: Array.isArray(serverState.followUps) ? serverState.followUps : [],
-              notes: Array.isArray(serverState.notes) ? serverState.notes : [],
-            };
-            stateRef.current = next;
-            return next;
-          });
+          let finalCusts = serverCusts;
+          let needUploadLocalToServer = false;
+          // If server database is empty but local storage has data (e.g. imported on this laptop),
+          // push local storage data to server database so mobile devices get it!
+          if (serverCusts.length === 0 && localCusts.length > 0) {
+            finalCusts = localCusts;
+            needUploadLocalToServer = true;
+          }
+
+          const next: State = {
+            ...initialLocalState,
+            ...serverState,
+            customers: finalCusts,
+            followUps:
+              Array.isArray(serverState.followUps) && serverState.followUps.length > 0
+                ? serverState.followUps
+                : initialLocalState.followUps,
+            notes:
+              Array.isArray(serverState.notes) && serverState.notes.length > 0
+                ? serverState.notes
+                : initialLocalState.notes,
+          };
+
+          setState(next);
+          stateRef.current = next;
+          try {
+            localStorage.setItem(KEY, JSON.stringify(next));
+          } catch {
+            /* ignore */
+          }
+
+          if (needUploadLocalToServer) {
+            fetch("/api/state", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify(next),
+            }).catch((err) => console.warn("Failed to push local state to server DB:", err));
+          }
+
           setIsLoaded(true);
+          initialSyncDoneRef.current = true;
         } else {
           setIsLoaded(true);
+          initialSyncDoneRef.current = true;
         }
       })
       .catch((err) => {
         console.warn("Could not load state from backend database, using local storage cache:", err);
         setIsLoaded(true);
+        initialSyncDoneRef.current = true;
       });
   }, []);
 
   useEffect(() => {
-    if (!isLoaded) return;
+    if (!isLoaded || !initialSyncDoneRef.current) return;
     try {
       localStorage.setItem(KEY, JSON.stringify(state));
     } catch {
@@ -242,12 +275,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
     // Debounce backend state saves to protect connection pools
     const timer = setTimeout(() => {
+      if (!initialSyncDoneRef.current) return;
       fetch("/api/state", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(state),
       }).catch((err) => console.warn("Auto-sync to backend database failed:", err));
-    }, 500);
+    }, 1000);
 
     return () => clearTimeout(timer);
   }, [state, isLoaded]);
