@@ -406,8 +406,8 @@ function DataPage() {
     setIsSaving(true);
     try {
       const newCustomers = staged.map((r) => ({ ...r }));
-      addCustomers(newCustomers);
-      await syncNow();
+      const updatedState = addCustomers(newCustomers);
+      await syncNow(updatedState);
       toast.success(
         `${staged.length} customer berhasil disimpan dan disinkronkan ke database PostgreSQL!`,
       );

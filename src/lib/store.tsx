@@ -4,6 +4,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -135,7 +136,7 @@ type Ctx = State & {
   removeCustomer: (id: string) => void;
   deleteCustomers: (ids: string[]) => void;
   clearAllCustomers: () => void;
-  addCustomers: (c: Customer[]) => void;
+  addCustomers: (c: Customer[]) => State;
   saveTemplate: (t: Template) => void;
   removeTemplate: (id: string) => void;
   addAccount: (a: Omit<Account, "id">) => void;
@@ -154,6 +155,12 @@ const KEY = "acc-followup-state-v3";
 export function StoreProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<State>(initial);
   const [isLoaded, setIsLoaded] = useState(false);
+  const stateRef = useRef<State>(initial);
+
+  useEffect(() => {
+    stateRef.current = state;
+  }, [state]);
+
   const [dbStatus, setDbStatus] = useState<{
     type: "PostgreSQL" | "File System" | "Local Cache";
     connected: boolean;
@@ -163,20 +170,22 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   });
 
   useEffect(() => {
-    // 1. Clear any legacy demo caches
+    // 1. Clear legacy caches & load local storage state first
     try {
       localStorage.removeItem("acc-followup-state-v1");
       localStorage.removeItem("acc-followup-state-v2");
       const raw = localStorage.getItem(KEY);
       if (raw) {
         const parsed = JSON.parse(raw);
-        setState({
+        const restored: State = {
           ...initial,
           ...parsed,
           customers: Array.isArray(parsed.customers) ? parsed.customers : [],
           followUps: Array.isArray(parsed.followUps) ? parsed.followUps : [],
           notes: Array.isArray(parsed.notes) ? parsed.notes : [],
-        });
+        };
+        setState(restored);
+        stateRef.current = restored;
       }
     } catch {
       /* ignore */
@@ -188,7 +197,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       .then((data) => setDbStatus(data))
       .catch((e) => console.warn("Failed to load db status", e));
 
-    // 3. Sync full state from Express / PostgreSQL backend
+    // 3. Sync full state from backend (PostgreSQL / Server File)
     fetch("/api/state")
       .then((res) => {
         if (!res.ok) throw new Error("HTTP error " + res.status);
@@ -196,26 +205,25 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       })
       .then((serverState) => {
         if (serverState && Array.isArray(serverState.accounts)) {
-          setState((prev) => ({
-            ...prev,
-            ...serverState,
-            customers: Array.isArray(serverState.customers) ? serverState.customers : [],
-            followUps: Array.isArray(serverState.followUps) ? serverState.followUps : [],
-            notes: Array.isArray(serverState.notes) ? serverState.notes : [],
-          }));
+          setState((prev) => {
+            const serverCusts = Array.isArray(serverState.customers) ? serverState.customers : [];
+            const prevCusts = Array.isArray(prev.customers) ? prev.customers : [];
+            // Preserve local customers if server returned empty list to prevent accidental wipe on refresh
+            const finalCustomers = serverCusts.length > 0 ? serverCusts : prevCusts;
+
+            const next: State = {
+              ...prev,
+              ...serverState,
+              customers: finalCustomers,
+              followUps: Array.isArray(serverState.followUps) ? serverState.followUps : [],
+              notes: Array.isArray(serverState.notes) ? serverState.notes : [],
+            };
+            stateRef.current = next;
+            return next;
+          });
           setIsLoaded(true);
         } else {
-          // If server database is unseeded, initialize it with clean state
-          fetch("/api/state", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify(initial),
-          })
-            .then(() => setIsLoaded(true))
-            .catch((err) => {
-              console.warn("Failed to initialize database", err);
-              setIsLoaded(true);
-            });
+          setIsLoaded(true);
         }
       })
       .catch((err) => {
@@ -244,31 +252,33 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return () => clearTimeout(timer);
   }, [state, isLoaded]);
 
-  const patch = useCallback((fn: (s: State) => State) => setState((s) => fn(s)), []);
+  const patch = useCallback((fn: (s: State) => State): State => {
+    const nextState = fn(stateRef.current);
+    stateRef.current = nextState;
+    setState(nextState);
+    return nextState;
+  }, []);
 
-  const syncNow = useCallback(
-    async (customState?: State): Promise<boolean> => {
-      const stateToSync = customState || state;
-      try {
-        localStorage.setItem(KEY, JSON.stringify(stateToSync));
-      } catch {
-        /* ignore */
-      }
-      try {
-        const res = await fetch("/api/state", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(stateToSync),
-        });
-        const data = await res.json();
-        return Boolean(data?.ok);
-      } catch (err) {
-        console.warn("Manual sync to backend database failed:", err);
-        return false;
-      }
-    },
-    [state],
-  );
+  const syncNow = useCallback(async (customState?: State): Promise<boolean> => {
+    const stateToSync = customState || stateRef.current;
+    try {
+      localStorage.setItem(KEY, JSON.stringify(stateToSync));
+    } catch {
+      /* ignore */
+    }
+    try {
+      const res = await fetch("/api/state", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(stateToSync),
+      });
+      const data = await res.json();
+      return Boolean(data?.success || data?.ok);
+    } catch (err) {
+      console.warn("Manual sync to backend database failed:", err);
+      return false;
+    }
+  }, []);
 
   const value = useMemo<Ctx>(
     () => ({

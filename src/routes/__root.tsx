@@ -13,24 +13,6 @@ import appCss from "../styles.css?url";
 import { StoreProvider } from "@/lib/store";
 import { Toaster } from "@/components/ui/sonner";
 
-if (typeof window !== "undefined") {
-  try {
-    let currentFetch = window.fetch;
-    Object.defineProperty(window, "fetch", {
-      get() {
-        return currentFetch;
-      },
-      set(val) {
-        currentFetch = val;
-      },
-      configurable: true,
-      enumerable: true,
-    });
-  } catch (e) {
-    console.error("Failed to make window.fetch mutable:", e);
-  }
-}
-
 function NotFoundComponent() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-background px-4">
