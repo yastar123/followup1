@@ -69,6 +69,8 @@ export type Account = {
   phone?: string;
   note?: string;
   createdAt?: string;
+  assignedTemplateIds?: string[];
+  defaultTemplateId?: string;
 };
 
 export type Note = {
@@ -143,6 +145,15 @@ type Ctx = State & {
   updateAccount: (id: string, patch: Partial<Omit<Account, "id">>) => void;
   removeAccount: (id: string) => void;
   toggleAccount: (id: string) => void;
+  setSalesBroadcastTemplates: (
+    accountId: string,
+    assignedTemplateIds: string[],
+    defaultTemplateId?: string,
+  ) => void;
+  setAllSalesBroadcastTemplates: (
+    assignedTemplateIds: string[],
+    defaultTemplateId?: string,
+  ) => void;
   addNote: (n: { title: string; body: string }) => void;
   updateNote: (id: string, patch: { title: string; body: string }) => void;
   removeNote: (id: string) => void;
@@ -363,6 +374,34 @@ export function StoreProvider({ children }: { children: ReactNode }) {
         patch((s) => ({
           ...s,
           accounts: s.accounts.map((a) => (a.id === id ? { ...a, active: !a.active } : a)),
+        })),
+      setSalesBroadcastTemplates: (accountId, assignedTemplateIds, defaultTemplateId) =>
+        patch((s) => ({
+          ...s,
+          accounts: s.accounts.map((a) =>
+            a.id === accountId
+              ? {
+                  ...a,
+                  assignedTemplateIds,
+                  defaultTemplateId:
+                    defaultTemplateId || assignedTemplateIds[0] || a.defaultTemplateId,
+                }
+              : a,
+          ),
+        })),
+      setAllSalesBroadcastTemplates: (assignedTemplateIds, defaultTemplateId) =>
+        patch((s) => ({
+          ...s,
+          accounts: s.accounts.map((a) =>
+            a.role === "sales"
+              ? {
+                  ...a,
+                  assignedTemplateIds,
+                  defaultTemplateId:
+                    defaultTemplateId || assignedTemplateIds[0] || a.defaultTemplateId,
+                }
+              : a,
+          ),
         })),
       setSheetUrl: (sheetUrl) => patch((s) => ({ ...s, sheetUrl })),
       addNote: (n) =>

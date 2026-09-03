@@ -51,6 +51,12 @@ export interface DbAccount {
   email: string;
   role: string;
   active: boolean;
+  password?: string;
+  phone?: string;
+  note?: string;
+  createdAt?: string;
+  assignedTemplateIds?: string[];
+  defaultTemplateId?: string;
 }
 
 export interface DbNote {

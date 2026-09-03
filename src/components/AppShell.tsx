@@ -10,6 +10,7 @@ import {
   Droplets,
   LogOut,
   ShieldCheck,
+  SlidersHorizontal,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { useStore } from "@/lib/store";
@@ -43,6 +44,12 @@ const adminNav = [
   { to: "/admin/data", label: "Database", short: "DB", icon: Table2 },
   { to: "/admin/rekap", label: "Rekap Customer", short: "Rekap", icon: ClipboardList },
   { to: "/admin/pesan", label: "Template Pesan", short: "Pesan", icon: MessageSquareText },
+  {
+    to: "/admin/pengaturan-broadcast",
+    label: "Pengaturan Broadcast",
+    short: "Broadcast",
+    icon: SlidersHorizontal,
+  },
   { to: "/admin/akun", label: "Buat Akun", short: "Akun", icon: UserCog },
   { to: "/admin/akses-sales", label: "Akses Halaman Sales", short: "Akses", icon: ShieldCheck },
 ];
