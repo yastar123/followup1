@@ -10,16 +10,18 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { markPendingFollowUp } from "@/components/PendingFollowUpWatcher";
-import { renderTemplate, useStore, waLink, type Customer } from "@/lib/store";
+import { renderTemplate, useStore, waLink, waBusinessLink, type Customer } from "@/lib/store";
 
 export function WaTemplateDialog({
   customer,
   open,
   onOpenChange,
+  channel = "WhatsApp",
 }: {
   customer: Customer;
   open: boolean;
   onOpenChange: (v: boolean) => void;
+  channel?: "WhatsApp" | "WhatsApp Business";
 }) {
   const { templates, accounts, user } = useStore();
 
@@ -74,19 +76,34 @@ export function WaTemplateDialog({
       toast.error("Pesan masih kosong.");
       return;
     }
-    markPendingFollowUp(customer.id, "WhatsApp");
-    toast.info("Setelah selesai chat, kembali ke sini untuk mencatat hasil follow up.");
-    window.open(waLink(customer.phone, message), "_blank", "noopener");
+    markPendingFollowUp(customer.id, channel);
+    toast.info(`Setelah selesai chat ${channel}, kembali ke sini untuk mencatat hasil follow up.`);
+    const link =
+      channel === "WhatsApp Business"
+        ? waBusinessLink(customer.phone, message)
+        : waLink(customer.phone, message);
+    window.open(link, "_blank", "noopener");
     onOpenChange(false);
   };
+
+  const isBusiness = channel === "WhatsApp Business";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[85vh] overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden sm:max-w-lg">
         <DialogHeader>
-          <DialogTitle>Kirim WhatsApp ke {customer.name}</DialogTitle>
+          <div className="flex items-center gap-2">
+            <DialogTitle>
+              Kirim {channel} ke {customer.name}
+            </DialogTitle>
+            {isBusiness && (
+              <span className="rounded-full bg-teal-500/15 px-2.5 py-0.5 text-xs font-semibold text-teal-600 dark:text-teal-400">
+                Business
+              </span>
+            )}
+          </div>
           <DialogDescription>
-            Pilih template pesan broadcast, lalu lihat hasil pesannya.
+            Pilih template pesan broadcast untuk dikirim melalui {channel}.
           </DialogDescription>
         </DialogHeader>
 
@@ -98,7 +115,9 @@ export function WaTemplateDialog({
               onClick={() => setTemplateId(t.id)}
               className={`w-full rounded-lg border px-4 py-3 text-left text-sm transition-colors ${
                 templateId === t.id
-                  ? "border-primary bg-primary/10 text-foreground"
+                  ? isBusiness
+                    ? "border-teal-600 bg-teal-500/10 text-foreground"
+                    : "border-primary bg-primary/10 text-foreground"
                   : "border-border text-muted-foreground hover:bg-secondary/50"
               }`}
             >
@@ -124,7 +143,16 @@ export function WaTemplateDialog({
           <Button variant="outline" onClick={() => onOpenChange(false)}>
             Batal
           </Button>
-          <Button onClick={send}>Kirim WhatsApp</Button>
+          <Button
+            onClick={send}
+            className={
+              isBusiness
+                ? "bg-teal-600 text-white hover:bg-teal-700 dark:bg-teal-700 dark:hover:bg-teal-600"
+                : ""
+            }
+          >
+            Kirim {channel}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

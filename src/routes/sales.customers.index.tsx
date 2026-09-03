@@ -7,7 +7,7 @@ import { CallButton } from "@/components/CallButton";
 import { Pager } from "@/components/Pager";
 import { PeriodFilter, type DateRange, type Period } from "@/components/PeriodFilter";
 import { Input } from "@/components/ui/input";
-import { WaButton } from "@/components/WaButton";
+import { WaButton, WaBusinessButton } from "@/components/WaButton";
 import { useStore } from "@/lib/store";
 
 const PAGE_SIZE = 10;
@@ -24,12 +24,13 @@ export const Route = createFileRoute("/sales/customers/")({
       {
         name: "description",
         content:
-          "Daftar customer sales lengkap dengan unit mobil, segmentasi, dan aksi WhatsApp atau telepon.",
+          "Daftar customer sales lengkap dengan unit mobil, segmentasi, dan aksi cepat WhatsApp, WA Business, atau telepon.",
       },
       { property: "og:title", content: "Data Customer — ACC One" },
       {
         property: "og:description",
-        content: "Daftar customer dengan unit mobil, segmentasi, dan aksi kontak cepat.",
+        content:
+          "Daftar customer dengan unit mobil, segmentasi, dan aksi kontak cepat WhatsApp, WA Business, serta telepon.",
       },
     ],
   }),
@@ -234,7 +235,7 @@ function CustomerList() {
 
       <div className="surface-card mt-6 overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[920px] text-sm [&_td]:whitespace-nowrap [&_th]:whitespace-nowrap">
+          <table className="w-full min-w-[1040px] text-sm [&_td]:whitespace-nowrap [&_th]:whitespace-nowrap">
             <thead className="bg-secondary/60 text-left text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
                 <th className="px-5 py-3 font-medium">Customer &amp; No. Kontrak</th>
@@ -243,7 +244,7 @@ function CustomerList() {
                 <th className="px-5 py-3 font-medium">Status Kontrak</th>
                 <th className="px-5 py-3 font-medium">Segmentasi &amp; Handling</th>
                 <th className="px-5 py-3 font-medium">Hasil Follow Up</th>
-                <th className="px-5 py-3 text-right font-medium">Aksi Cepat</th>
+                <th className="px-5 py-3 text-right font-medium min-w-[320px]">Aksi Cepat</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-border">
@@ -324,9 +325,18 @@ function CustomerList() {
                       )}
                     </td>
                     <td className="px-5 py-3.5">
-                      <div className="flex justify-end gap-2" onClick={(e) => e.stopPropagation()}>
-                        <WaButton customer={c} size="sm" chooseTemplate />
-                        <CallButton customer={c} size="sm" />
+                      <div
+                        className="flex items-center justify-end gap-1.5"
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        <WaButton customer={c} size="sm" chooseTemplate label="WhatsApp" />
+                        <WaBusinessButton
+                          customer={c}
+                          size="sm"
+                          chooseTemplate
+                          label="WA Business"
+                        />
+                        <CallButton customer={c} size="sm" label="Telepon" />
                       </div>
                     </td>
                   </tr>

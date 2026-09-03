@@ -49,11 +49,12 @@ export function FollowUpDialog({
 
   if (!customer) return null;
 
-  const connectedOutcome: FollowUp["outcome"] =
-    channel === "WhatsApp" ? "Chat dibalas" : "Telepon dijawab";
-  const notConnectedOutcome: FollowUp["outcome"] =
-    channel === "WhatsApp" ? "Chat tidak dibalas" : "Telepon tidak dijawab";
-  const title = "Hasil telepon";
+  const isChat = channel === "WhatsApp" || channel === "WhatsApp Business";
+  const connectedOutcome: FollowUp["outcome"] = isChat ? "Chat dibalas" : "Telepon dijawab";
+  const notConnectedOutcome: FollowUp["outcome"] = isChat
+    ? "Chat tidak dibalas"
+    : "Telepon tidak dijawab";
+  const title = `Hasil follow up (${channel})`;
 
   const close = () => onOpenChange(false);
 
@@ -66,7 +67,7 @@ export function FollowUpDialog({
       reason: "-",
       nextAction: "-",
     });
-    toast.info(`Hasil ${channel === "WhatsApp" ? "chat" : "telepon"} tercatat: tidak terhubung`);
+    toast.info(`Hasil ${isChat ? "chat" : "telepon"} tercatat: tidak terhubung`);
     close();
   };
 
@@ -80,7 +81,7 @@ export function FollowUpDialog({
       reason: prospect.trim() || "-",
       nextAction: "-",
     });
-    toast.success(`Hasil ${channel === "WhatsApp" ? "chat" : "telepon"} tercatat`);
+    toast.success(`Hasil ${isChat ? "chat" : "telepon"} tercatat`);
     close();
   };
 

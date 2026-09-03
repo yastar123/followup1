@@ -2,9 +2,10 @@ import { createFileRoute, Link, notFound } from "@tanstack/react-router";
 import { useState } from "react";
 import { ArrowLeft, ClipboardPlus } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
+import { CallButton } from "@/components/CallButton";
 import { FollowUpDialog } from "@/components/FollowUpDialog";
 import { StatusBadge } from "@/components/StatusBadge";
-import { WaButton } from "@/components/WaButton";
+import { WaButton, WaBusinessButton } from "@/components/WaButton";
 import { Button } from "@/components/ui/button";
 import { renderTemplate, rupiah, useStore } from "@/lib/store";
 
@@ -54,11 +55,13 @@ function CustomerDetail() {
       title={customer.name}
       subtitle={`${customer.company} · ${customer.city}`}
       actions={
-        <div className="flex gap-2 [&>*]:shrink-0">
+        <div className="flex flex-wrap gap-2 [&>*]:shrink-0">
           <Button variant="outline" onClick={() => setOpen(true)} className="gap-1.5">
             <ClipboardPlus className="size-4" /> Catat follow up
           </Button>
-          <WaButton customer={customer} templateId={template?.id} label="Chat WhatsApp" />
+          <WaButton customer={customer} templateId={template?.id} label="WhatsApp" />
+          <WaBusinessButton customer={customer} templateId={template?.id} label="WA Business" />
+          <CallButton customer={customer} label="Telepon" />
         </div>
       }
     >

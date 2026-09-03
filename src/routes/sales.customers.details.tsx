@@ -5,7 +5,7 @@ import { AppShell } from "@/components/AppShell";
 import { CallButton } from "@/components/CallButton";
 import { FollowUpDialog } from "@/components/FollowUpDialog";
 import { StatusBadge } from "@/components/StatusBadge";
-import { WaButton } from "@/components/WaButton";
+import { WaButton, WaBusinessButton } from "@/components/WaButton";
 import { Button } from "@/components/ui/button";
 import { useStore } from "@/lib/store";
 
@@ -81,11 +81,12 @@ function CustomerDetails() {
       title={customer.name}
       subtitle={`No. Kontrak: ${customer.contractNumber || "-"} · ${customer.unitType || customer.unit || "-"} (${customer.handling || customer.region || "-"})`}
       actions={
-        <div className="flex gap-2 [&>*]:shrink-0">
+        <div className="flex flex-wrap gap-2 [&>*]:shrink-0">
           <Button variant="outline" onClick={() => setOpen(true)} className="gap-1.5">
             <ClipboardPlus className="size-4" /> Catat follow up
           </Button>
           <WaButton customer={customer} label="WhatsApp" />
+          <WaBusinessButton customer={customer} label="WA Business" />
           <CallButton customer={customer} label="Telepon Seluler" />
         </div>
       }
@@ -131,6 +132,7 @@ function CustomerDetails() {
 
           <div className="mt-6 flex flex-wrap gap-2 pt-4 border-t border-border">
             <WaButton customer={customer} label="Chat WhatsApp" />
+            <WaBusinessButton customer={customer} label="Chat WA Business" />
             <CallButton customer={customer} label="Telepon Seluler" />
           </div>
         </section>

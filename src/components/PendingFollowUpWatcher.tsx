@@ -20,9 +20,12 @@ function readPending(): Pending | null {
     if (!raw) return null;
     const parsed = JSON.parse(raw);
     if (parsed && typeof parsed.id === "string") {
+      let ch: FollowUp["channel"] = "WhatsApp";
+      if (parsed.channel === "Telepon") ch = "Telepon";
+      else if (parsed.channel === "WhatsApp Business") ch = "WhatsApp Business";
       return {
         id: parsed.id,
-        channel: parsed.channel === "Telepon" ? "Telepon" : "WhatsApp",
+        channel: ch,
       };
     }
     if (raw && raw !== "null") return { id: raw, channel: "WhatsApp" };

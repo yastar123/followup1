@@ -41,7 +41,7 @@ export type Customer = {
 export type FollowUp = {
   id: string;
   customerId: string;
-  channel: "WhatsApp" | "Telepon";
+  channel: "WhatsApp" | "WhatsApp Business" | "Telepon";
   outcome: "Chat dibalas" | "Chat tidak dibalas" | "Telepon dijawab" | "Telepon tidak dijawab";
   interest:
     | "Tertarik"
@@ -519,3 +519,6 @@ export function renderTemplate(body: string, c: Customer, sales: string) {
 
 export const waLink = (phone: string, message: string) =>
   `https://wa.me/${phone.replace(/\D/g, "")}?text=${encodeURIComponent(message)}`;
+
+export const waBusinessLink = (phone: string, message: string) =>
+  `https://api.whatsapp.com/send?phone=${phone.replace(/\D/g, "")}&text=${encodeURIComponent(message)}`;
