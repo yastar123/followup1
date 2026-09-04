@@ -58,16 +58,20 @@ export function FollowUpDialog({
 
   const close = () => onOpenChange(false);
 
-  const saveNotConnected = () => {
+  const saveNotConnected = (customReason?: string) => {
     addFollowUp({
       customerId: customer.id,
       channel,
       outcome: notConnectedOutcome,
       interest: "Masih Pertimbangan",
-      reason: "-",
+      reason: customReason || (isChat ? "Tidak ada nomor WA" : "-"),
       nextAction: "-",
     });
-    toast.info(`Hasil ${isChat ? "chat" : "telepon"} tercatat: tidak terhubung`);
+    toast.info(
+      isChat
+        ? "Hasil WhatsApp tercatat: Tidak ada nomor WA"
+        : "Hasil telepon tercatat: tidak terhubung",
+    );
     close();
   };
 
@@ -98,11 +102,16 @@ export function FollowUpDialog({
         {step === "connect" ? (
           <div className="space-y-6">
             <div className="space-y-2">
-              <Label>Apakah terhubung?</Label>
+              <Label>{isChat ? "Status pengiriman pesan:" : "Apakah terhubung?"}</Label>
               <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                <Button onClick={() => setStep("result")}>Terhubung</Button>
-                <Button variant="outline" onClick={saveNotConnected}>
-                  Tidak terhubung
+                <Button onClick={() => setStep("result")}>
+                  {isChat ? "Terkirim" : "Terhubung"}
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => saveNotConnected(isChat ? "Tidak ada nomor WA" : undefined)}
+                >
+                  {isChat ? "Tidak ada nomor wa" : "Tidak terhubung"}
                 </Button>
               </div>
             </div>
