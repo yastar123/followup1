@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { NotebookPen, Pencil, Trash2 } from "lucide-react";
 import { AppShell } from "@/components/AppShell";
 import { Pager } from "@/components/Pager";
-import { useStore } from "@/lib/store";
+import { isMatchSales, useStore } from "@/lib/store";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -29,8 +29,10 @@ export const Route = createFileRoute("/sales/note")({
 });
 
 function NotePage() {
-  const { notes, addNote, updateNote, removeNote } = useStore();
-  const list = notes ?? [];
+  const { user, notes, addNote, updateNote, removeNote } = useStore();
+  const list = useMemo(() => {
+    return (notes ?? []).filter((n) => !user || !n.by || isMatchSales(n.by, user));
+  }, [notes, user]);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);

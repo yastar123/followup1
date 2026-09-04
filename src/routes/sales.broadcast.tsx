@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { renderTemplate, useStore, type Customer } from "@/lib/store";
+import { isMatchSales, renderTemplate, useStore, type Customer } from "@/lib/store";
 
 export const Route = createFileRoute("/sales/broadcast")({
   head: () => ({
@@ -102,6 +102,10 @@ function BroadcastPage() {
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>(defaultTemplateId);
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
 
+  const myCustomers = useMemo(() => {
+    return customers.filter((c) => isMatchSales(c.owner, user));
+  }, [customers, user]);
+
   // Sync selectedTemplateId when defaultTemplateId changes
   useEffect(() => {
     if (defaultTemplateId && !availableTemplates.some((t) => t.id === selectedTemplateId)) {
@@ -117,13 +121,15 @@ function BroadcastPage() {
     [availableTemplates, templates, selectedTemplateId],
   );
 
+  const targetCustomers = myCustomers.length > 0 ? myCustomers : customers;
+
   const activeCustomer = useMemo(() => {
     if (selectedCustomerId) {
-      const found = customers.find((c) => c.id === selectedCustomerId);
+      const found = targetCustomers.find((c) => c.id === selectedCustomerId);
       if (found) return found;
     }
-    return customers[0] || defaultCustomer;
-  }, [customers, selectedCustomerId]);
+    return targetCustomers[0] || defaultCustomer;
+  }, [targetCustomers, selectedCustomerId]);
 
   const renderedPreview = useMemo(() => {
     if (!activeTemplate) return "";
@@ -226,20 +232,20 @@ function BroadcastPage() {
             </div>
 
             {/* Customer Picker */}
-            {customers.length > 0 && (
+            {targetCustomers.length > 0 && (
               <div className="space-y-1.5 bg-muted/20 p-3.5 rounded-lg border border-border/60">
                 <label className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                   <User className="size-3.5 text-primary" /> Target Customer Penerima
                 </label>
                 <Select
-                  value={selectedCustomerId || customers[0]?.id}
+                  value={selectedCustomerId || targetCustomers[0]?.id}
                   onValueChange={setSelectedCustomerId}
                 >
                   <SelectTrigger className="bg-background">
                     <SelectValue placeholder="Pilih customer target..." />
                   </SelectTrigger>
                   <SelectContent className="max-h-60">
-                    {customers.map((c) => (
+                    {targetCustomers.map((c) => (
                       <SelectItem key={c.id} value={c.id}>
                         {c.name} · {c.unitType || c.unit || "Unit"} ({c.contractNumber || c.phone})
                       </SelectItem>

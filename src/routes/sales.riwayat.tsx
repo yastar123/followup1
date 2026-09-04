@@ -1,8 +1,8 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { Pager } from "@/components/Pager";
-import { useStore } from "@/lib/store";
+import { isMatchSales, useStore } from "@/lib/store";
 
 const PAGE_SIZE = 10;
 
@@ -23,10 +23,21 @@ export const Route = createFileRoute("/sales/riwayat")({
 });
 
 function HistoryPage() {
-  const { followUps, customers } = useStore();
+  const { user, followUps, customers } = useStore();
   const [page, setPage] = useState(1);
-  const totalPages = Math.max(1, Math.ceil(followUps.length / PAGE_SIZE));
   const [isMounted, setIsMounted] = useState(false);
+
+  // Filter only follow-up records belonging to this sales rep
+  const myFollowUps = useMemo(() => {
+    return followUps.filter((f) => {
+      const c = customers.find((x) => x.id === f.customerId);
+      const matchesUser = isMatchSales(f.by, user) || (c && isMatchSales(c.owner, user));
+      if (user && !matchesUser) return false;
+      return true;
+    });
+  }, [followUps, customers, user]);
+
+  const totalPages = Math.max(1, Math.ceil(myFollowUps.length / PAGE_SIZE));
 
   useEffect(() => {
     setIsMounted(true);
@@ -36,13 +47,13 @@ function HistoryPage() {
     if (page > totalPages) setPage(totalPages);
   }, [page, totalPages]);
 
-  const pageItems = followUps.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const pageItems = myFollowUps.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   return (
     <AppShell
       role="sales"
       title="Riwayat Follow Up"
-      subtitle={`${followUps.length} catatan tersimpan`}
+      subtitle={`${myFollowUps.length} catatan tersimpan`}
     >
       <ol className="relative space-y-4 border-l border-border pl-6">
         {pageItems.map((f) => {
@@ -83,7 +94,7 @@ function HistoryPage() {
             </li>
           );
         })}
-        {followUps.length === 0 && (
+        {myFollowUps.length === 0 && (
           <li className="text-sm text-muted-foreground">Belum ada riwayat follow up.</li>
         )}
       </ol>
@@ -92,9 +103,9 @@ function HistoryPage() {
         <Pager
           page={page}
           totalPages={totalPages}
-          total={followUps.length}
-          from={(page - 1) * PAGE_SIZE + 1}
-          to={Math.min(page * PAGE_SIZE, followUps.length)}
+          total={myFollowUps.length}
+          from={myFollowUps.length === 0 ? 0 : (page - 1) * PAGE_SIZE + 1}
+          to={Math.min(page * PAGE_SIZE, myFollowUps.length)}
           onPageChange={setPage}
         />
       </div>

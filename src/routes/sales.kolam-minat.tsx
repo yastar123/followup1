@@ -6,7 +6,7 @@ import { Pager } from "@/components/Pager";
 import { StatusBadge } from "@/components/StatusBadge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { useStore } from "@/lib/store";
+import { isMatchSales, useStore } from "@/lib/store";
 
 const PAGE_SIZE = 10;
 
@@ -31,22 +31,30 @@ export const Route = createFileRoute("/sales/kolam-minat")({
 
 function InterestPoolPage() {
   const navigate = useNavigate();
-  const { followUps, customers } = useStore();
+  const { user, followUps, customers } = useStore();
   const [q, setQ] = useState("");
   const [page, setPage] = useState(1);
 
   const rows = useMemo(() => {
     const list = followUps
-      .filter((f) => f.reason && f.reason.trim() !== "" && f.reason.trim() !== "-")
+      .filter((f) => {
+        const c = customers.find((x) => x.id === f.customerId);
+        // Ensure data strictly belongs to the logged-in sales
+        const matchesUser = isMatchSales(f.by, user) || (c && isMatchSales(c.owner, user));
+        if (user && !matchesUser) return false;
+
+        return f.reason && f.reason.trim() !== "" && f.reason.trim() !== "-";
+      })
       .map((f) => ({ f, c: customers.find((x) => x.id === f.customerId) ?? null }));
+
     const term = q.trim().toLowerCase();
     if (!term) return list;
     return list.filter(({ f, c }) =>
-      [c?.name, c?.phone, c?.company, c?.city, f.interest, f.reason]
+      [c?.name, c?.phone, c?.company, c?.city, c?.contractNumber, f.interest, f.reason]
         .filter(Boolean)
         .some((v) => String(v).toLowerCase().includes(term)),
     );
-  }, [followUps, customers, q]);
+  }, [followUps, customers, user, q]);
 
   const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
 

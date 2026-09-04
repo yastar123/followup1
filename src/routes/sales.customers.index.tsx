@@ -8,7 +8,7 @@ import { Pager } from "@/components/Pager";
 import { PeriodFilter, type DateRange, type Period } from "@/components/PeriodFilter";
 import { Input } from "@/components/ui/input";
 import { WaButton, WaBusinessButton } from "@/components/WaButton";
-import { useStore } from "@/lib/store";
+import { isMatchSales, useStore } from "@/lib/store";
 
 const PAGE_SIZE = 10;
 
@@ -97,7 +97,7 @@ function CustomerList() {
   const rows = useMemo(() => {
     return customers.filter((c) => {
       // Must belong to current sales user
-      if (user && c.owner !== user) return false;
+      if (user && !isMatchSales(c.owner, user)) return false;
 
       // Check date in period
       if (!isInPeriod(c.createdAt, period, range) && !latestFollowUpByCustomer.has(c.id)) {

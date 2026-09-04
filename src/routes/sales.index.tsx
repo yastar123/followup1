@@ -6,7 +6,7 @@ import { StatCard } from "@/components/StatCard";
 import { ProgressBanner } from "@/components/ProgressBanner";
 import { SalesProfileCard } from "@/components/SalesProfileCard";
 import { PeriodFilter, type Period, type DateRange } from "@/components/PeriodFilter";
-import { useStore } from "@/lib/store";
+import { isMatchSales, useStore } from "@/lib/store";
 
 export const Route = createFileRoute("/sales/")({
   head: () => ({
@@ -58,7 +58,7 @@ function SalesDashboard() {
   const [range, setRange] = useState<DateRange | undefined>(undefined);
   const { user, customers, followUps } = useStore();
 
-  const myCustomers = customers.filter((c) => c.owner === user);
+  const myCustomers = customers.filter((c) => isMatchSales(c.owner, user));
 
   const followUpsInPeriod = followUps.filter((f) => isInPeriod(f.at, period, range));
   const latestFollowUpInPeriodByCustomer = new Map<string, (typeof followUps)[number]>();
