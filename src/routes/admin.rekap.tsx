@@ -37,6 +37,24 @@ export const Route = createFileRoute("/admin/rekap")({
 
 const PAGE_SIZE = 10;
 
+const normalizeSalesName = (name?: string) => {
+  if (!name) return "";
+  return name.replace(/^Sales\s*[·\-\s]\s*/i, "").trim();
+};
+
+const matchOwner = (customerOwner: string | undefined, targetSales: string) => {
+  if (targetSales === "all") return true;
+  const cleanOwner = normalizeSalesName(customerOwner);
+  if (targetSales === "unassigned") {
+    return !cleanOwner || cleanOwner === "Belum ditugaskan" || cleanOwner === "-";
+  }
+  const cleanTarget = normalizeSalesName(targetSales);
+  return (
+    cleanOwner.toLowerCase() === cleanTarget.toLowerCase() ||
+    (customerOwner || "").toLowerCase() === targetSales.toLowerCase()
+  );
+};
+
 function RekapPage() {
   const { customers, followUps, accounts } = useStore();
 
@@ -48,19 +66,14 @@ function RekapPage() {
   const [selectedChannel, setSelectedChannel] = useState<string>("all");
   const [page, setPage] = useState(1);
 
-  // List of sales accounts & owners
+  // List of sales accounts strictly from registered system accounts
   const salesList = useMemo(() => {
-    const list = new Set<string>();
-    accounts
-      .filter((a) => a.role === "sales" && a.active !== false)
-      .forEach((a) => list.add(a.name));
-    customers.forEach((c) => {
-      if (c.owner && c.owner !== "Belum ditugaskan") {
-        list.add(c.owner);
-      }
-    });
-    return Array.from(list).sort();
-  }, [accounts, customers]);
+    const list = accounts
+      .filter((a) => a.role === "sales")
+      .map((a) => normalizeSalesName(a.name))
+      .filter(Boolean);
+    return Array.from(new Set(list)).sort((a, b) => a.localeCompare(b));
+  }, [accounts]);
 
   // List of unique segments
   const segmentList = useMemo(() => {
@@ -90,6 +103,7 @@ function RekapPage() {
           c.segment,
           c.handling,
           c.owner,
+          normalizeSalesName(c.owner),
         ]
           .filter(Boolean)
           .join(" ")
@@ -100,11 +114,7 @@ function RekapPage() {
 
       // Filter Sales PIC
       if (selectedSales !== "all") {
-        if (selectedSales === "unassigned") {
-          if (c.owner && c.owner !== "Belum ditugaskan") return false;
-        } else {
-          if (c.owner !== selectedSales) return false;
-        }
+        if (!matchOwner(c.owner, selectedSales)) return false;
       }
 
       const list = followUps.filter((f) => f.customerId === c.id);
@@ -179,12 +189,7 @@ function RekapPage() {
 
   // Overall & Per-Sales Statistics
   const stats = useMemo(() => {
-    const baseCustomers =
-      selectedSales === "all"
-        ? customers
-        : selectedSales === "unassigned"
-          ? customers.filter((c) => !c.owner || c.owner === "Belum ditugaskan")
-          : customers.filter((c) => c.owner === selectedSales);
+    const baseCustomers = customers.filter((c) => matchOwner(c.owner, selectedSales));
 
     const total = baseCustomers.length;
     let done = 0;
@@ -462,12 +467,13 @@ function RekapPage() {
                     <td className="px-5 py-3.5">
                       <span
                         className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                          c.owner && c.owner !== "Belum ditugaskan"
+                          normalizeSalesName(c.owner) &&
+                          normalizeSalesName(c.owner) !== "Belum ditugaskan"
                             ? "bg-primary/10 text-primary"
                             : "bg-muted text-muted-foreground"
                         }`}
                       >
-                        {c.owner || "Belum ditugaskan"}
+                        {normalizeSalesName(c.owner) || "Belum ditugaskan"}
                       </span>
                     </td>
                     <td className="px-5 py-3.5 text-center">
