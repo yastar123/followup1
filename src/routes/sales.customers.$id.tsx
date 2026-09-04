@@ -59,8 +59,8 @@ function CustomerDetail() {
           <Button variant="outline" onClick={() => setOpen(true)} className="gap-1.5">
             <ClipboardPlus className="size-4" /> Catat follow up
           </Button>
-          <WaButton customer={customer} templateId={template?.id} label="WhatsApp" />
-          <WaBusinessButton customer={customer} templateId={template?.id} label="WA Business" />
+          <WaButton customer={customer} label="WhatsApp" chooseTemplate />
+          <WaBusinessButton customer={customer} label="WA Business" chooseTemplate />
           <CallButton customer={customer} label="Telepon" />
         </div>
       }
@@ -198,8 +198,13 @@ function CustomerDetail() {
           <p className="mt-4 whitespace-pre-wrap rounded-lg bg-secondary/70 p-4 text-sm text-foreground">
             {template ? renderTemplate(template.body, customer, user) : "Belum ada template."}
           </p>
-          <div className="mt-4">
+          <div className="mt-4 flex flex-wrap gap-2">
             <WaButton customer={customer} templateId={template?.id} label="Kirim via WhatsApp" />
+            <WaBusinessButton
+              customer={customer}
+              templateId={template?.id}
+              label="Kirim via WA Business"
+            />
           </div>
         </section>
       </div>

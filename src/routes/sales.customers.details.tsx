@@ -85,8 +85,8 @@ function CustomerDetails() {
           <Button variant="outline" onClick={() => setOpen(true)} className="gap-1.5">
             <ClipboardPlus className="size-4" /> Catat follow up
           </Button>
-          <WaButton customer={customer} label="WhatsApp" />
-          <WaBusinessButton customer={customer} label="WA Business" />
+          <WaButton customer={customer} label="WhatsApp" chooseTemplate />
+          <WaBusinessButton customer={customer} label="WA Business" chooseTemplate />
           <CallButton customer={customer} label="Telepon Seluler" />
         </div>
       }
@@ -131,8 +131,8 @@ function CustomerDetails() {
           </dl>
 
           <div className="mt-6 flex flex-wrap gap-2 pt-4 border-t border-border">
-            <WaButton customer={customer} label="Chat WhatsApp" />
-            <WaBusinessButton customer={customer} label="Chat WA Business" />
+            <WaButton customer={customer} label="Chat WhatsApp" chooseTemplate />
+            <WaBusinessButton customer={customer} label="Chat WA Business" chooseTemplate />
             <CallButton customer={customer} label="Telepon Seluler" />
           </div>
         </section>
