@@ -58,7 +58,10 @@ function SalesDashboard() {
   const [range, setRange] = useState<DateRange | undefined>(undefined);
   const { user, customers, followUps } = useStore();
 
-  const myCustomers = customers.filter((c) => isMatchSales(c.owner, user));
+  const isSalesUser = Boolean(user && !user.toLowerCase().includes("admin"));
+  const myCustomers = isSalesUser
+    ? customers.filter((c) => isMatchSales(c.owner, user))
+    : customers;
 
   const followUpsInPeriod = followUps.filter((f) => isInPeriod(f.at, period, range));
   const latestFollowUpInPeriodByCustomer = new Map<string, (typeof followUps)[number]>();

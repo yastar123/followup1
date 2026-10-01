@@ -96,8 +96,9 @@ function CustomerList() {
 
   const rows = useMemo(() => {
     return customers.filter((c) => {
-      // Must belong to current sales user
-      if (user && !isMatchSales(c.owner, user)) return false;
+      // Must belong to current sales user (if logged in as sales)
+      const isSalesUser = Boolean(user && !user.toLowerCase().includes("admin"));
+      if (isSalesUser && !isMatchSales(c.owner, user)) return false;
 
       // Check date in period
       if (!isInPeriod(c.createdAt, period, range) && !latestFollowUpByCustomer.has(c.id)) {

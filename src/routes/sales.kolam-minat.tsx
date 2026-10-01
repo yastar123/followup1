@@ -39,9 +39,10 @@ function InterestPoolPage() {
     const list = followUps
       .filter((f) => {
         const c = customers.find((x) => x.id === f.customerId);
-        // Ensure data strictly belongs to the logged-in sales
+        // Ensure data strictly belongs to the logged-in sales (if sales)
+        const isSalesUser = Boolean(user && !user.toLowerCase().includes("admin"));
         const matchesUser = isMatchSales(f.by, user) || (c && isMatchSales(c.owner, user));
-        if (user && !matchesUser) return false;
+        if (isSalesUser && !matchesUser) return false;
 
         return f.reason && f.reason.trim() !== "" && f.reason.trim() !== "-";
       })

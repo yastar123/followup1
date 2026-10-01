@@ -31,8 +31,9 @@ function HistoryPage() {
   const myFollowUps = useMemo(() => {
     return followUps.filter((f) => {
       const c = customers.find((x) => x.id === f.customerId);
+      const isSalesUser = Boolean(user && !user.toLowerCase().includes("admin"));
       const matchesUser = isMatchSales(f.by, user) || (c && isMatchSales(c.owner, user));
-      if (user && !matchesUser) return false;
+      if (isSalesUser && !matchesUser) return false;
       return true;
     });
   }, [followUps, customers, user]);

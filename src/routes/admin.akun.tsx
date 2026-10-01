@@ -91,7 +91,6 @@ function AkunPage() {
     removeAccount,
     toggleAccount,
     impersonate,
-    syncNow,
   } = useStore();
 
   // Search & Filters
@@ -251,7 +250,7 @@ function AkunPage() {
 
     setIsSaving(true);
     try {
-      addAccount({
+      await addAccount({
         name: cleanName,
         email: cleanEmail,
         phone: formPhone.trim(),
@@ -261,13 +260,12 @@ function AkunPage() {
         note: formNote.trim(),
         createdAt: new Date().toISOString(),
       });
-      await syncNow();
       toast.success(
         `Akun "${cleanName}" (${formRole.toUpperCase()}) berhasil dibuat & disimpan ke database!`,
       );
       setIsAddOpen(false);
-    } catch {
-      toast.error("Terjadi kendala saat menyimpan akun ke database.");
+    } catch (err: unknown) {
+      toast.error((err as Error)?.message || "Terjadi kendala saat menyimpan akun ke database.");
     } finally {
       setIsSaving(false);
     }
@@ -280,7 +278,7 @@ function AkunPage() {
 
     const cleanName = formName.trim();
     const cleanEmail = formEmail.trim().toLowerCase();
-    const cleanPassword = formPassword.trim() || selectedAccount.password || "password123";
+    const cleanPassword = formPassword.trim();
 
     if (!cleanName) {
       toast.error("Nama lengkap wajib diisi.");
@@ -290,7 +288,7 @@ function AkunPage() {
       toast.error("Email tidak valid.");
       return;
     }
-    if (cleanPassword.length < 6) {
+    if (cleanPassword && cleanPassword.length < 6) {
       toast.error("Sandi minimal 6 karakter.");
       return;
     }
@@ -306,21 +304,20 @@ function AkunPage() {
 
     setIsSaving(true);
     try {
-      updateAccount(selectedAccount.id, {
+      await updateAccount(selectedAccount.id, {
         name: cleanName,
         email: cleanEmail,
         phone: formPhone.trim(),
         role: formRole,
         active: formActive,
-        password: cleanPassword,
+        ...(cleanPassword ? { password: cleanPassword } : {}),
         note: formNote.trim(),
       });
-      await syncNow();
       toast.success(`Perubahan akun "${cleanName}" berhasil disimpan ke database.`);
       setIsEditOpen(false);
       setSelectedAccount(null);
-    } catch {
-      toast.error("Gagal memperbarui akun di database.");
+    } catch (err: unknown) {
+      toast.error((err as Error)?.message || "Gagal memperbarui akun di database.");
     } finally {
       setIsSaving(false);
     }
@@ -339,11 +336,10 @@ function AkunPage() {
 
     setIsSaving(true);
     try {
-      removeAccount(selectedAccount.id);
-      await syncNow();
+      await removeAccount(selectedAccount.id);
       toast.success(`Akun "${selectedAccount.name}" berhasil dihapus.`);
-    } catch {
-      toast.error("Gagal menghapus akun dari database.");
+    } catch (err: unknown) {
+      toast.error((err as Error)?.message || "Gagal menghapus akun dari database.");
     } finally {
       setIsSaving(false);
       setIsDeleteOpen(false);
@@ -353,8 +349,7 @@ function AkunPage() {
 
   // Quick Toggle Active Status
   const handleToggle = async (id: string, name: string, currentStatus: boolean) => {
-    toggleAccount(id);
-    await syncNow();
+    await toggleAccount(id);
     toast.success(`Status akun "${name}" diubah menjadi ${!currentStatus ? "Aktif" : "Nonaktif"}.`);
   };
 

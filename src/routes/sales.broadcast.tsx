@@ -103,7 +103,8 @@ function BroadcastPage() {
   const [selectedCustomerId, setSelectedCustomerId] = useState<string>("");
 
   const myCustomers = useMemo(() => {
-    return customers.filter((c) => isMatchSales(c.owner, user));
+    const isSalesUser = Boolean(user && !user.toLowerCase().includes("admin"));
+    return isSalesUser ? customers.filter((c) => isMatchSales(c.owner, user)) : customers;
   }, [customers, user]);
 
   // Sync selectedTemplateId when defaultTemplateId changes

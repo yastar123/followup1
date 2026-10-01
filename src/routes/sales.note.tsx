@@ -31,7 +31,8 @@ export const Route = createFileRoute("/sales/note")({
 function NotePage() {
   const { user, notes, addNote, updateNote, removeNote } = useStore();
   const list = useMemo(() => {
-    return (notes ?? []).filter((n) => !user || !n.by || isMatchSales(n.by, user));
+    const isSalesUser = Boolean(user && !user.toLowerCase().includes("admin"));
+    return (notes ?? []).filter((n) => !isSalesUser || !n.by || isMatchSales(n.by, user));
   }, [notes, user]);
   const [title, setTitle] = useState("");
   const [body, setBody] = useState("");

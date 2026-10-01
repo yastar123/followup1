@@ -67,7 +67,7 @@ export function AppShell({
   actions?: ReactNode;
   children: ReactNode;
 }) {
-  const { user, setRole, dbStatus, impersonating, stopImpersonate } = useStore();
+  const { user, logout, dbStatus, impersonating, stopImpersonate } = useStore();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const nav = role === "sales" ? salesNav : adminNav;
 
@@ -121,7 +121,7 @@ export function AppShell({
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton asChild tooltip="Keluar">
-                  <Link to="/" onClick={() => setRole(null)}>
+                  <Link to="/" onClick={() => logout()}>
                     <LogOut className="size-4" />
                     <span>Keluar</span>
                   </Link>

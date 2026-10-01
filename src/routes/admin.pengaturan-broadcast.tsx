@@ -89,7 +89,6 @@ function PengaturanBroadcastPage() {
     setSalesBroadcastTemplates,
     setAllSalesBroadcastTemplates,
     impersonate,
-    syncNow,
   } = useStore();
 
   const navigate = useNavigate();
@@ -213,7 +212,6 @@ function PengaturanBroadcastPage() {
     });
 
     toast.success(`Pengaturan broadcast untuk ${account.name} berhasil disimpan.`);
-    await syncNow();
   };
 
   const handleApplyBatchToAll = async () => {
@@ -231,7 +229,6 @@ function PengaturanBroadcastPage() {
       toast.success(
         `Template "${targetTemplate?.name || "Pilihan"}" berhasil diterapkan ke seluruh tim sales!`,
       );
-      await syncNow();
     } catch {
       toast.error("Gagal menerapkan template serentak.");
     } finally {
@@ -244,7 +241,6 @@ function PengaturanBroadcastPage() {
     setAllSalesBroadcastTemplates(allIds, allIds[0]);
     setDrafts({});
     toast.success("Semua sales telah diatur untuk dapat menggunakan seluruh template.");
-    await syncNow();
   };
 
   const handleTestAsSales = (account: Account) => {

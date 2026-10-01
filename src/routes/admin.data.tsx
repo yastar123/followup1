@@ -238,9 +238,9 @@ function DataPage() {
     updateCustomer,
     removeCustomer,
     deleteCustomers,
-    clearAllCustomers,
-    addCustomers,
-    syncNow,
+    importCustomers,
+    isLoaded,
+    loadError,
   } = useStore();
 
   const [staged, setStaged] = useState<StagedRow[]>([]);
@@ -276,7 +276,6 @@ function DataPage() {
   const [customerToDelete, setCustomerToDelete] = useState<Customer | null>(null);
 
   const [isDeleteBatchOpen, setIsDeleteBatchOpen] = useState(false);
-  const [isClearAllOpen, setIsClearAllOpen] = useState(false);
 
   const [isBatchAssignOpen, setIsBatchAssignOpen] = useState(false);
   const [batchSalesTarget, setBatchSalesTarget] = useState("");
@@ -349,11 +348,10 @@ function DataPage() {
       const ownerName = `Sales · ${dbSales}`;
       const targetCustomers = customers.slice(a - 1, b);
 
-      targetCustomers.forEach((c) => {
-        updateCustomer(c.id, { owner: ownerName });
-      });
+      for (const c of targetCustomers) {
+        await updateCustomer(c.id, { owner: ownerName });
+      }
 
-      await syncNow();
       toast.success(
         `Customer nomor ${a}–${b} (${targetCustomers.length} data) berhasil ditugaskan ke ${dbSales} dan disinkronkan ke PostgreSQL!`,
       );
@@ -415,15 +413,14 @@ function DataPage() {
     setIsSaving(true);
     try {
       const newCustomers = staged.map((r) => ({ ...r }));
-      const updatedState = addCustomers(newCustomers);
-      await syncNow(updatedState);
+      const res = await importCustomers(newCustomers);
       toast.success(
-        `${staged.length} customer berhasil disimpan dan disinkronkan ke database PostgreSQL!`,
+        `${res.count} customer berhasil disimpan dan disinkronkan ke database PostgreSQL!`,
       );
       setStaged([]);
       setFileName("");
-    } catch {
-      toast.error("Gagal menyimpan ke database server.");
+    } catch (err: unknown) {
+      toast.error((err as Error)?.message || "Gagal menyimpan ke database server.");
     } finally {
       setIsSaving(false);
     }
@@ -563,11 +560,14 @@ function DataPage() {
         createdAt: new Date().toISOString(),
       };
 
-      addCustomer(newCustomer);
-      await syncNow();
-      toast.success(`Customer "${cleanName}" berhasil ditambahkan dan disinkronkan ke PostgreSQL!`);
-      setIsAddOpen(false);
-      setAddForm(defaultFormState);
+      const created = await addCustomer(newCustomer);
+      if (created) {
+        toast.success(`Customer "${cleanName}" berhasil ditambahkan ke database PostgreSQL!`);
+        setIsAddOpen(false);
+        setAddForm(defaultFormState);
+      } else {
+        toast.error("Gagal menambahkan customer ke database.");
+      }
     } catch {
       toast.error("Gagal menyimpan data customer baru.");
     } finally {
@@ -588,7 +588,7 @@ function DataPage() {
       let phone = editForm.phone.trim().replace(/\D/g, "");
       if (phone.startsWith("0")) phone = `62${phone.slice(1)}`;
 
-      updateCustomer(editingCustomer.id, {
+      const ok = await updateCustomer(editingCustomer.id, {
         name: cleanName,
         contractNumber: editForm.contractNumber.trim() || "-",
         phone,
@@ -609,10 +609,13 @@ function DataPage() {
         note: editForm.note.trim(),
       });
 
-      await syncNow();
-      toast.success(`Data "${cleanName}" berhasil diperbarui dan disinkronkan ke PostgreSQL!`);
-      setIsEditOpen(false);
-      setEditingCustomer(null);
+      if (ok) {
+        toast.success(`Data "${cleanName}" berhasil diperbarui di database PostgreSQL!`);
+        setIsEditOpen(false);
+        setEditingCustomer(null);
+      } else {
+        toast.error("Gagal memperbarui data customer di database.");
+      }
     } catch {
       toast.error("Gagal memperbarui data customer.");
     } finally {
@@ -624,12 +627,15 @@ function DataPage() {
     if (!customerToDelete) return;
     setIsSavingCustomer(true);
     try {
-      removeCustomer(customerToDelete.id);
-      await syncNow();
-      toast.success(`Customer "${customerToDelete.name}" berhasil dihapus dari database.`);
-      setIsDeleteSingleOpen(false);
-      setCustomerToDelete(null);
-      setSelectedIds((prev) => prev.filter((id) => id !== customerToDelete.id));
+      const ok = await removeCustomer(customerToDelete.id);
+      if (ok) {
+        toast.success(`Customer "${customerToDelete.name}" berhasil dihapus dari database.`);
+        setIsDeleteSingleOpen(false);
+        setCustomerToDelete(null);
+        setSelectedIds((prev) => prev.filter((id) => id !== customerToDelete.id));
+      } else {
+        toast.error("Gagal menghapus data customer.");
+      }
     } catch {
       toast.error("Gagal menghapus customer.");
     } finally {
@@ -641,29 +647,13 @@ function DataPage() {
     if (!selectedIds.length) return;
     setIsSavingCustomer(true);
     try {
-      const count = selectedIds.length;
-      deleteCustomers(selectedIds);
-      await syncNow();
+      const idsToDelete = selectedIds.slice(0, 200);
+      const count = await deleteCustomers(idsToDelete);
       toast.success(`${count} data customer berhasil dihapus dari database.`);
       setIsDeleteBatchOpen(false);
-      setSelectedIds([]);
-    } catch {
-      toast.error("Gagal menghapus data customer.");
-    } finally {
-      setIsSavingCustomer(false);
-    }
-  };
-
-  const handleConfirmClearAll = async () => {
-    setIsSavingCustomer(true);
-    try {
-      clearAllCustomers();
-      await syncNow();
-      toast.success("Seluruh database customer berhasil dikosongkan.");
-      setIsClearAllOpen(false);
-      setSelectedIds([]);
-    } catch {
-      toast.error("Gagal mengosongkan database.");
+      setSelectedIds((prev) => prev.filter((id) => !idsToDelete.includes(id)));
+    } catch (err: unknown) {
+      toast.error((err as Error)?.message || "Gagal menghapus data customer.");
     } finally {
       setIsSavingCustomer(false);
     }
@@ -677,10 +667,9 @@ function DataPage() {
     setIsSavingCustomer(true);
     try {
       const ownerName = `Sales · ${batchSalesTarget}`;
-      selectedIds.forEach((id) => {
-        updateCustomer(id, { owner: ownerName });
-      });
-      await syncNow();
+      for (const id of selectedIds) {
+        await updateCustomer(id, { owner: ownerName });
+      }
       toast.success(`${selectedIds.length} customer berhasil ditugaskan ke ${batchSalesTarget}.`);
       setIsBatchAssignOpen(false);
       setSelectedIds([]);
@@ -840,6 +829,18 @@ function DataPage() {
       subtitle="Import database Excel, kelola CRUD customer, dan bagi penanganan ke sales."
     >
       <div className="grid gap-6">
+        {loadError && (
+          <div className="p-4 rounded-xl border border-destructive/30 bg-destructive/10 text-destructive flex items-center gap-3">
+            <AlertTriangle className="size-5 shrink-0" />
+            <div>
+              <p className="font-semibold text-sm">Gagal Terhubung ke Database Server</p>
+              <p className="text-xs mt-0.5">
+                {loadError}. Semua aksi simpan dan impor dinonaktifkan demi keamanan data.
+              </p>
+            </div>
+          </div>
+        )}
+
         {/* Section 1: Excel Import */}
         <section className="surface-card p-4 sm:p-6">
           <h2 className="text-base sm:text-lg font-medium text-foreground">1. Import file Excel</h2>
@@ -852,7 +853,7 @@ function DataPage() {
           <div className="mt-4 flex flex-col sm:flex-row flex-wrap items-stretch sm:items-center gap-2.5">
             <Button
               onClick={() => fileRef.current?.click()}
-              disabled={loading}
+              disabled={loading || !isLoaded || !!loadError}
               className="gap-2 w-full sm:w-auto justify-center text-xs sm:text-sm"
             >
               <FileSpreadsheet className="size-4" />
@@ -1052,15 +1053,6 @@ function DataPage() {
               >
                 <Download className="size-4" /> Export Follow Up ({followUps.length})
               </Button>
-              {customers.length > 0 ? (
-                <Button
-                  variant="outline"
-                  onClick={() => setIsClearAllOpen(true)}
-                  className="gap-2 text-destructive border-destructive/30 hover:bg-destructive/10 w-full sm:w-auto justify-center text-xs sm:text-sm h-9"
-                >
-                  <Trash2 className="size-4" /> Kosongkan DB
-                </Button>
-              ) : null}
             </div>
           </div>
 
@@ -2037,32 +2029,6 @@ function DataPage() {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90 w-full sm:w-auto"
             >
               {isSavingCustomer ? "Menghapus..." : `Hapus ${selectedIds.length} Data`}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
-
-      {/* ALERT DIALOG 3: Kosongkan Seluruh Database */}
-      <AlertDialog open={isClearAllOpen} onOpenChange={setIsClearAllOpen}>
-        <AlertDialogContent className="w-[92vw] sm:max-w-lg p-4 sm:p-6">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2 text-destructive text-base sm:text-lg">
-              <Trash2 className="size-5 shrink-0" /> Kosongkan Seluruh Database Customer?
-            </AlertDialogTitle>
-            <AlertDialogDescription className="text-xs sm:text-sm">
-              Tindakan ini akan menghapus <strong>semua {customers.length} data customer</strong>{" "}
-              yang tersimpan di database ACC One. Gunakan ini jika Anda ingin mereset dan mengunggah
-              ulang data dari Excel baru.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter className="flex flex-col-reverse sm:flex-row gap-2">
-            <AlertDialogCancel className="w-full sm:w-auto">Batal</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleConfirmClearAll}
-              disabled={isSavingCustomer}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90 w-full sm:w-auto"
-            >
-              {isSavingCustomer ? "Mengosongkan..." : "Ya, Kosongkan Semua Data"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

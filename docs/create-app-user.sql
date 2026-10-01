@@ -1,0 +1,25 @@
+-- ==============================================================================
+-- PANDUAN PEMBUATAN USER POSTGRESQL APLIKASI (LEAST-PRIVILEGE / NON-SUPERUSER)
+-- ==============================================================================
+-- PERHATIAN: 
+-- File ini adalah file DOKUMENTASI untuk referensi SysAdmin.
+-- JANGAN dijalankan otomatis oleh aplikasi. Jalankan manual via psql di server jika ingin membatasi hak akses user database.
+--
+-- Langkah-langkah:
+-- 1. Masuk ke psql sebagai superuser postgres:
+--    sudo -u postgres psql
+--
+-- 2. Buat database dan user aplikasi khusus:
+--    CREATE USER acc_app_user WITH ENCRYPTED PASSWORD 'GANTI_DENGAN_PASSWORD_KUAT_ANDA';
+--    CREATE DATABASE acc_db OWNER acc_app_user;
+--
+-- 3. Berikan hak akses hanya ke tabel-tabel yang dibutuhkan (SELECT, INSERT, UPDATE, DELETE):
+--    \c acc_db;
+--    GRANT CONNECT ON DATABASE acc_db TO acc_app_user;
+--    GRANT USAGE ON SCHEMA public TO acc_app_user;
+--    GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO acc_app_user;
+--    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO acc_app_user;
+--
+-- 4. Konfigurasikan DATABASE_URL di file .env server Anda:
+--    DATABASE_URL="postgresql://acc_app_user:PASSWORD_KUAT_ANDA@localhost:5432/acc_db"
+-- ==============================================================================

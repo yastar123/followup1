@@ -172,21 +172,7 @@ async function runDbPush() {
       );
     `);
 
-    console.log("✨ All tables created/verified successfully!");
-
-    // Check if initial JSON data exists to seed into PostgreSQL
-    const jsonPath = path.join(process.cwd(), "acc_db.json");
-    if (fs.existsSync(jsonPath)) {
-      console.log("Found acc_db.json. Syncing seed state to acc_app_state table...");
-      const rawData = fs.readFileSync(jsonPath, "utf-8");
-      await client.query(
-        `INSERT INTO acc_app_state (key, value, updated_at)
-         VALUES ('full_state', $1, CURRENT_TIMESTAMP)
-         ON CONFLICT (key) DO UPDATE SET value = $1, updated_at = CURRENT_TIMESTAMP`,
-        [rawData],
-      );
-      console.log("✅ acc_db.json data successfully pushed & synced to PostgreSQL!");
-    }
+    console.log("✨ All tables created/verified successfully without modifying data!");
   } catch (err) {
     console.error("❌ DB Push Error:", err);
   } finally {

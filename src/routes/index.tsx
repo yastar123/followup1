@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ArrowRight, Lock, Mail, MessageCircle, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -30,13 +30,23 @@ export const Route = createFileRoute("/")({
 });
 
 function LoginPage() {
-  const { accounts, setRole } = useStore();
+  const { role, login } = useStore();
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  const submit = (e: React.FormEvent) => {
+  // Auto-redirect if already logged in
+  useEffect(() => {
+    if (role === "admin") {
+      navigate({ to: "/admin" });
+    } else if (role === "sales") {
+      navigate({ to: "/sales" });
+    }
+  }, [role, navigate]);
+
+  const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     const value = email.trim().toLowerCase();
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
@@ -48,54 +58,27 @@ function LoginPage() {
       return;
     }
 
-    const adminEmail = (import.meta.env.VITE_ADMIN_EMAIL || "admin@acc.co.id")
-      .toLowerCase()
-      .replace(/['"]/g, "")
-      .trim();
-    const adminPassword = (import.meta.env.VITE_ADMIN_PASSWORD || "password123")
-      .replace(/['"]/g, "")
-      .trim();
+    setError(null);
+    setIsSubmitting(true);
 
-    const account = accounts.find((a) => a.email.toLowerCase() === value);
-
-    // If logging in as configured admin
-    if (value === adminEmail || account?.role === "admin") {
-      const expectedAdminPassword = account?.password || adminPassword || "password123";
-      if (
-        password !== expectedAdminPassword &&
-        password !== adminPassword &&
-        password !== "password123"
-      ) {
-        setError("Sandi admin salah. Silakan periksa kembali.");
+    try {
+      const result = await login(value, password);
+      if (!result.success) {
+        setError(result.error || "Gagal masuk ke sistem.");
         return;
       }
-      setError(null);
-      setRole("admin", account?.name || "Admin Utama");
-      toast.success(`Selamat datang, ${account?.name || "Admin Utama"}`);
-      navigate({ to: "/admin" });
-      return;
-    }
 
-    if (!account) {
-      setError("Email belum terdaftar. Silakan hubungi administrator.");
-      return;
+      toast.success("Berhasil masuk ke sistem!");
+      if (result.role === "admin") {
+        navigate({ to: "/admin" });
+      } else {
+        navigate({ to: "/sales" });
+      }
+    } catch {
+      setError("Terjadi kesalahan pada koneksi server.");
+    } finally {
+      setIsSubmitting(false);
     }
-    if (!account.active) {
-      setError("Akun ini sedang dinonaktifkan. Hubungi admin.");
-      return;
-    }
-
-    const expectedPassword = account.password || "password123";
-    if (password !== expectedPassword && password !== "password123") {
-      setError("Sandi yang Anda masukkan salah.");
-      return;
-    }
-
-    setError(null);
-    const userName = `Sales · ${account.name.split(" ")[0]}`;
-    setRole(account.role, userName);
-    toast.success(`Selamat datang, ${account.name}`);
-    navigate({ to: account.role === "sales" ? "/sales" : "/admin" });
   };
 
   return (
@@ -153,6 +136,7 @@ function LoginPage() {
                   className="pl-9"
                   maxLength={255}
                   value={email}
+                  disabled={isSubmitting}
                   onChange={(e) => setEmail(e.target.value)}
                 />
               </div>
@@ -170,6 +154,7 @@ function LoginPage() {
                   className="pl-9"
                   maxLength={72}
                   value={password}
+                  disabled={isSubmitting}
                   onChange={(e) => setPassword(e.target.value)}
                 />
               </div>
@@ -177,8 +162,8 @@ function LoginPage() {
 
             {error && <p className="text-sm text-destructive">{error}</p>}
 
-            <Button type="submit" className="w-full">
-              Masuk
+            <Button type="submit" className="w-full" disabled={isSubmitting}>
+              {isSubmitting ? "Memverifikasi..." : "Masuk"}
               <ArrowRight className="size-4" />
             </Button>
           </form>
