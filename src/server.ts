@@ -1,4 +1,5 @@
 import "./lib/error-capture";
+import { isIP } from "node:net";
 
 import { consumeLastCapturedError } from "./lib/error-capture";
 import { renderErrorPage } from "./lib/error-page";
@@ -137,15 +138,34 @@ const LOGIN_WINDOW_MS = 15 * 60 * 1000; // 15 menit
 const MAX_FAILED_IP = 10;
 const MAX_FAILED_EMAIL = 5;
 
-function getClientIp(request: Request): string {
-  // Prioritas x-real-ip (diteruskan dari Nginx)
+function isValidIp(ip?: string | null): boolean {
+  if (!ip || typeof ip !== "string") return false;
+  return isIP(ip.trim()) !== 0;
+}
+
+function getClientIp(request: Request, ctx?: unknown): string {
+  // Hanya gunakan x-real-ip dari reverse proxy jika valid
   const realIp = request.headers.get("x-real-ip")?.trim();
-  if (realIp) return realIp;
+  if (realIp && isValidIp(realIp)) {
+    return realIp;
+  }
 
-  // Fallback ke header IP tunggal terpercaya lainnya
-  const cfIp = request.headers.get("cf-connecting-ip")?.trim();
-  if (cfIp) return cfIp;
+  // Fallback ke alamat soket jaringan lokal/asli
+  const socketAddress =
+    (request as { socket?: { remoteAddress?: string } })?.socket?.remoteAddress ||
+    (request as { raw?: { socket?: { remoteAddress?: string } } })?.raw?.socket?.remoteAddress ||
+    (request as { connection?: { remoteAddress?: string } })?.connection?.remoteAddress ||
+    (ctx as { socket?: { remoteAddress?: string } })?.socket?.remoteAddress ||
+    (ctx as { req?: { socket?: { remoteAddress?: string } } })?.req?.socket?.remoteAddress;
 
+  if (socketAddress && typeof socketAddress === "string") {
+    const trimmedSocket = socketAddress.trim();
+    if (isValidIp(trimmedSocket)) {
+      return trimmedSocket;
+    }
+  }
+
+  // Fallback default jika tidak ada info soket valid
   return "127.0.0.1";
 }
 
@@ -232,7 +252,7 @@ export default {
     try {
       const url = new URL(request.url);
       const pathname = url.pathname;
-      const clientIp = getClientIp(request);
+      const clientIp = getClientIp(request, ctx);
 
       // -----------------------------------------------------
       // /api/* ROUTES HANDLING
