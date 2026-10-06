@@ -108,19 +108,32 @@ export async function verifyPassword(
 ): Promise<{ valid: boolean; needsRehash: boolean }> {
   if (!hashedOrPlain || !plainText) return { valid: false, needsRehash: false };
 
+  const normalizedHashed = String(hashedOrPlain).trim();
+  const normalizedPlain = String(plainText).trim();
+
+  // Reject dangerous placeholders and default values
+  if (
+    normalizedHashed === "placeholder_not_used" ||
+    normalizedHashed === "password123" ||
+    normalizedPlain === "placeholder_not_used" ||
+    normalizedPlain === "password123"
+  ) {
+    return { valid: false, needsRehash: false };
+  }
+
   // Check if it's already a bcrypt hash
   const isBcrypt =
-    hashedOrPlain.startsWith("$2a$") ||
-    hashedOrPlain.startsWith("$2b$") ||
-    hashedOrPlain.startsWith("$2y$");
+    normalizedHashed.startsWith("$2a$") ||
+    normalizedHashed.startsWith("$2b$") ||
+    normalizedHashed.startsWith("$2y$");
 
   if (isBcrypt) {
-    const valid = await bcrypt.compare(plainText, hashedOrPlain);
+    const valid = await bcrypt.compare(plainText, normalizedHashed);
     return { valid, needsRehash: false };
   }
 
-  // Legacy plaintext match
-  if (hashedOrPlain === plainText) {
+  // Legacy plaintext match (only for safe passwords >= 12 chars)
+  if (normalizedHashed === normalizedPlain && normalizedPlain.length >= 12) {
     return { valid: true, needsRehash: true };
   }
 
@@ -1250,27 +1263,24 @@ export async function upsertAccount(
         ],
       );
     } else {
-      // Update without touching existing password
+      // Update existing account profile without altering existing password
       await client.query(
-        `INSERT INTO accounts (id, name, email, role, active, password, phone, note, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-         ON CONFLICT (id) DO UPDATE SET
-           name = EXCLUDED.name,
-           email = EXCLUDED.email,
-           role = EXCLUDED.role,
-           active = EXCLUDED.active,
-           phone = EXCLUDED.phone,
-           note = EXCLUDED.note`,
+        `UPDATE accounts SET
+           name = $2,
+           email = $3,
+           role = $4,
+           active = $5,
+           phone = $6,
+           note = $7
+         WHERE id = $1`,
         [
           account.id,
           account.name,
           account.email.trim().toLowerCase(),
           account.role || "sales",
           account.active ?? true,
-          "placeholder_not_used",
           account.phone || "",
           account.note || "",
-          account.createdAt || new Date().toISOString(),
         ],
       );
     }
@@ -1298,7 +1308,7 @@ export async function upsertAccount(
     email: account.email,
     role: account.role || "sales",
     active: account.active ?? true,
-    password: finalPasswordHash || existing?.password || "password123",
+    password: finalPasswordHash || existing?.password || "",
     phone: account.phone || "",
     note: account.note || "",
     createdAt: account.createdAt || existing?.createdAt || new Date().toISOString(),

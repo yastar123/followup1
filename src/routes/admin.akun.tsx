@@ -102,6 +102,7 @@ function AkunPage() {
   const [isAddOpen, setIsAddOpen] = useState(false);
   const [isEditOpen, setIsEditOpen] = useState(false);
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isResetOpen, setIsResetOpen] = useState(false);
   const [selectedAccount, setSelectedAccount] = useState<Account | null>(null);
 
   // Form States for Add / Edit
@@ -113,7 +114,8 @@ function AkunPage() {
   const [formNote, setFormNote] = useState("");
   const [formPassword, setFormPassword] = useState("");
   const [showFormPassword, setShowFormPassword] = useState(false);
-  const [visiblePasswords, setVisiblePasswords] = useState<Record<string, boolean>>({});
+  const [resetPasswordValue, setResetPasswordValue] = useState("");
+  const [showResetPassword, setShowResetPassword] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
 
   // Filtered Accounts
@@ -159,16 +161,21 @@ function AkunPage() {
     return counts;
   }, [accounts, customers]);
 
-  // Helper to generate a random password
-  const generateRandomPassword = () => {
+  // Helper to generate a random 12-character password
+  const generateRandomPassword = (target: "add" | "reset" = "add") => {
     const chars = "abcdefghjkmnpqrstuvwxyz23456789";
     let res = "acc";
-    for (let i = 0; i < 5; i++) {
+    for (let i = 0; i < 9; i++) {
       res += chars.charAt(Math.floor(Math.random() * chars.length));
     }
-    setFormPassword(res);
-    setShowFormPassword(true);
-    toast.info(`Sandi acak dibuat: ${res}`);
+    if (target === "add") {
+      setFormPassword(res);
+      setShowFormPassword(true);
+    } else {
+      setResetPasswordValue(res);
+      setShowResetPassword(true);
+    }
+    toast.info(`Sandi acak 12 karakter dibuat: ${res}`);
   };
 
   // Open Create Modal
@@ -179,7 +186,7 @@ function AkunPage() {
     setFormRole("sales");
     setFormActive(true);
     setFormNote("");
-    setFormPassword("acc12345");
+    setFormPassword("");
     setShowFormPassword(false);
     setIsAddOpen(true);
   };
@@ -193,9 +200,17 @@ function AkunPage() {
     setFormRole(account.role);
     setFormActive(account.active);
     setFormNote(account.note || "");
-    setFormPassword(account.password || "password123");
+    setFormPassword("");
     setShowFormPassword(false);
     setIsEditOpen(true);
+  };
+
+  // Open Reset Password Modal
+  const handleOpenResetPassword = (account: Account) => {
+    setSelectedAccount(account);
+    setResetPasswordValue("");
+    setShowResetPassword(false);
+    setIsResetOpen(true);
   };
 
   // Open Delete Confirmation
@@ -209,7 +224,7 @@ function AkunPage() {
     e.preventDefault();
     const cleanName = formName.trim();
     const cleanEmail = formEmail.trim().toLowerCase();
-    const cleanPassword = formPassword.trim() || "acc12345";
+    const cleanPassword = formPassword.trim();
 
     if (!cleanName) {
       toast.error("Nama lengkap wajib diisi.");
@@ -219,8 +234,8 @@ function AkunPage() {
       toast.error("Email tidak valid.");
       return;
     }
-    if (cleanPassword.length < 6) {
-      toast.error("Sandi minimal 6 karakter.");
+    if (!cleanPassword || cleanPassword.length < 12) {
+      toast.error("Kata sandi wajib diisi minimal 12 karakter.");
       return;
     }
 
@@ -254,6 +269,35 @@ function AkunPage() {
     }
   };
 
+  // Submit Reset Password
+  const handleSubmitResetPassword = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedAccount) return;
+
+    const cleanPassword = resetPasswordValue.trim();
+    if (!cleanPassword || cleanPassword.length < 12) {
+      toast.error("Kata sandi baru minimal 12 karakter.");
+      return;
+    }
+
+    setIsSaving(true);
+    try {
+      await updateAccount(selectedAccount.id, {
+        password: cleanPassword,
+      });
+      toast.success(
+        `Kata sandi untuk "${selectedAccount.name}" berhasil diperbarui. Sandi terenkripsi (Bcrypt) dan tidak akan ditampilkan ulang.`,
+      );
+      setIsResetOpen(false);
+      setResetPasswordValue("");
+      setSelectedAccount(null);
+    } catch (err: unknown) {
+      toast.error((err as Error)?.message || "Gagal memperbarui kata sandi di database.");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   // Submit Edit Account
   const handleSubmitEdit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -271,8 +315,8 @@ function AkunPage() {
       toast.error("Email tidak valid.");
       return;
     }
-    if (cleanPassword && cleanPassword.length < 6) {
-      toast.error("Sandi minimal 6 karakter.");
+    if (cleanPassword && cleanPassword.length < 12) {
+      toast.error("Kata sandi minimal 12 karakter.");
       return;
     }
 
@@ -546,7 +590,7 @@ function AkunPage() {
                           </div>
                         </td>
 
-                        {/* Email, Phone & Password */}
+                        {/* Email & Phone */}
                         <td className="px-4 py-3.5 space-y-1">
                           <div className="flex items-center gap-1.5 text-foreground font-mono">
                             <Mail className="size-3 text-muted-foreground shrink-0" />
@@ -564,38 +608,10 @@ function AkunPage() {
                             </div>
                           )}
                           <div className="flex items-center gap-1.5 text-muted-foreground">
-                            <Lock className="size-3 text-muted-foreground shrink-0" />
-                            <span className="font-mono text-[11px] font-medium text-foreground">
-                              {visiblePasswords[a.id] ? a.password || "password123" : "••••••••"}
+                            <Lock className="size-3 text-emerald-600 dark:text-emerald-400" />
+                            <span className="text-[11px] text-muted-foreground font-medium">
+                              Terkunci (Bcrypt)
                             </span>
-                            <button
-                              type="button"
-                              onClick={() =>
-                                setVisiblePasswords((prev) => ({
-                                  ...prev,
-                                  [a.id]: !prev[a.id],
-                                }))
-                              }
-                              className="text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors"
-                              title={visiblePasswords[a.id] ? "Sembunyikan Sandi" : "Lihat Sandi"}
-                            >
-                              {visiblePasswords[a.id] ? (
-                                <EyeOff className="size-3 text-amber-600 dark:text-amber-400" />
-                              ) : (
-                                <Eye className="size-3" />
-                              )}
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                navigator.clipboard.writeText(a.password || "password123");
-                                toast.success(`Sandi untuk ${a.name} berhasil disalin!`);
-                              }}
-                              className="text-muted-foreground hover:text-foreground p-0.5 rounded transition-colors"
-                              title="Salin Sandi ke Clipboard"
-                            >
-                              <Copy className="size-3" />
-                            </button>
                           </div>
                         </td>
 
@@ -704,13 +720,10 @@ function AkunPage() {
                                   <Pencil className="size-3.5" /> Edit Data
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
-                                  onClick={() => {
-                                    navigator.clipboard.writeText(a.password || "password123");
-                                    toast.success(`Sandi untuk ${a.name} berhasil disalin!`);
-                                  }}
-                                  className="gap-2"
+                                  onClick={() => handleOpenResetPassword(a)}
+                                  className="gap-2 text-amber-600 dark:text-amber-400 focus:text-amber-600 focus:bg-amber-50 dark:focus:bg-amber-950/20"
                                 >
-                                  <Copy className="size-3.5" /> Salin Sandi
+                                  <KeyRound className="size-3.5" /> Reset Kata Sandi
                                 </DropdownMenuItem>
                                 <DropdownMenuItem
                                   onClick={() => handleToggle(a.id, a.name, a.active)}
@@ -799,10 +812,10 @@ function AkunPage() {
                   </Label>
                   <button
                     type="button"
-                    onClick={generateRandomPassword}
+                    onClick={() => generateRandomPassword("add")}
                     className="text-[11px] text-primary hover:underline flex items-center gap-1 font-medium"
                   >
-                    <KeyRound className="size-3" /> Buat Sandi Acak
+                    <KeyRound className="size-3" /> Buat Sandi Acak (12 Karakter)
                   </button>
                 </div>
                 <div className="relative">
@@ -812,10 +825,10 @@ function AkunPage() {
                     type={showFormPassword ? "text" : "password"}
                     value={formPassword}
                     onChange={(e) => setFormPassword(e.target.value)}
-                    placeholder="Minimal 6 karakter"
+                    placeholder="Minimal 12 karakter"
                     className="pl-9 pr-10 font-mono text-xs"
                     required
-                    minLength={6}
+                    minLength={12}
                   />
                   <button
                     type="button"
@@ -827,7 +840,7 @@ function AkunPage() {
                   </button>
                 </div>
                 <p className="text-[11px] text-muted-foreground">
-                  Sandi ini digunakan oleh pengguna untuk masuk ke dashboard sistem ACC One.
+                  Sandi minimal 12 karakter, disimpan dalam bentuk hash Bcrypt aman.
                 </p>
               </div>
 
@@ -937,7 +950,7 @@ function AkunPage() {
 
               <div className="space-y-1.5">
                 <Label htmlFor="edit-password" className="text-xs font-semibold">
-                  Kata Sandi / Password Baru
+                  Kata Sandi Baru (Opsional)
                 </Label>
                 <div className="relative">
                   <Lock className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
@@ -946,9 +959,9 @@ function AkunPage() {
                     type={showFormPassword ? "text" : "password"}
                     value={formPassword}
                     onChange={(e) => setFormPassword(e.target.value)}
-                    placeholder="Minimal 6 karakter"
+                    placeholder="Kosongkan jika tidak diubah (min 12 karakter)"
                     className="pl-9 pr-10 font-mono text-xs"
-                    minLength={6}
+                    minLength={12}
                   />
                   <button
                     type="button"
@@ -960,7 +973,7 @@ function AkunPage() {
                   </button>
                 </div>
                 <p className="text-[11px] text-muted-foreground">
-                  Dapat diperbarui langsung atau biarkan jika tidak ingin mengubah sandi.
+                  Kosongkan jika tidak ingin mengubah kata sandi. Jika diisi, minimal 12 karakter.
                 </p>
               </div>
 
@@ -1027,6 +1040,86 @@ function AkunPage() {
                 </Button>
                 <Button type="submit" disabled={isSaving} className="gap-1.5">
                   {isSaving ? "Menyimpan..." : "Simpan Perubahan"}
+                </Button>
+              </DialogFooter>
+            </form>
+          </DialogContent>
+        </Dialog>
+
+        {/* Dialog: Reset Kata Sandi */}
+        <Dialog open={isResetOpen} onOpenChange={setIsResetOpen}>
+          <DialogContent className="sm:max-w-[440px]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+                <KeyRound className="size-5" /> Reset Kata Sandi
+              </DialogTitle>
+              <DialogDescription>
+                Tetapkan kata sandi baru untuk akun{" "}
+                <strong className="text-foreground">{selectedAccount?.name}</strong> (
+                <span className="font-mono">{selectedAccount?.email}</span>).
+              </DialogDescription>
+            </DialogHeader>
+
+            <form onSubmit={handleSubmitResetPassword} className="space-y-4 py-2">
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="reset-password-input" className="text-xs font-semibold">
+                    Kata Sandi Baru <span className="text-destructive">*</span>
+                  </Label>
+                  <button
+                    type="button"
+                    onClick={() => generateRandomPassword("reset")}
+                    className="text-[11px] text-primary hover:underline flex items-center gap-1 font-medium"
+                  >
+                    <KeyRound className="size-3" /> Buat Sandi Acak (12 Karakter)
+                  </button>
+                </div>
+                <div className="relative">
+                  <Lock className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+                  <Input
+                    id="reset-password-input"
+                    type={showResetPassword ? "text" : "password"}
+                    value={resetPasswordValue}
+                    onChange={(e) => setResetPasswordValue(e.target.value)}
+                    placeholder="Minimal 12 karakter"
+                    className="pl-9 pr-10 font-mono text-xs"
+                    required
+                    minLength={12}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowResetPassword(!showResetPassword)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground p-1"
+                    title={showResetPassword ? "Sembunyikan Sandi" : "Lihat Sandi"}
+                  >
+                    {showResetPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  Kata sandi baru akan langsung di-hash menggunakan Bcrypt dan tidak pernah
+                  ditampilkan ulang demi keamanan privasi pengguna.
+                </p>
+              </div>
+
+              <DialogFooter className="pt-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    setIsResetOpen(false);
+                    setResetPasswordValue("");
+                    setSelectedAccount(null);
+                  }}
+                  disabled={isSaving}
+                >
+                  Batal
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isSaving}
+                  className="gap-1.5 bg-amber-600 hover:bg-amber-700 text-white"
+                >
+                  {isSaving ? "Menyimpan..." : "Simpan Sandi Baru"}
                 </Button>
               </DialogFooter>
             </form>

@@ -123,6 +123,93 @@ function checkRateLimit(ip: string, maxPerMin = 150): boolean {
   return record.count <= maxPerMin;
 }
 
+// Dedicated Rate Limiter for Login (Failed attempts tracking)
+// 10 failed attempts per IP per 15 minutes
+// 5 failed attempts per email per 15 minutes
+interface FailedAttemptRecord {
+  count: number;
+  firstAttemptAt: number;
+}
+
+const loginFailedIpMap = new Map<string, FailedAttemptRecord>();
+const loginFailedEmailMap = new Map<string, FailedAttemptRecord>();
+const LOGIN_WINDOW_MS = 15 * 60 * 1000; // 15 menit
+const MAX_FAILED_IP = 10;
+const MAX_FAILED_EMAIL = 5;
+
+function getClientIp(request: Request): string {
+  // Prioritas x-real-ip (diteruskan dari Nginx)
+  const realIp = request.headers.get("x-real-ip")?.trim();
+  if (realIp) return realIp;
+
+  // Fallback ke header IP tunggal terpercaya lainnya
+  const cfIp = request.headers.get("cf-connecting-ip")?.trim();
+  if (cfIp) return cfIp;
+
+  return "127.0.0.1";
+}
+
+function checkLoginRateLimit(
+  ip: string,
+  emailKey: string,
+): { allowed: boolean; retryAfterSeconds?: number } {
+  const now = Date.now();
+
+  // 1. Check IP limit
+  const ipRec = loginFailedIpMap.get(ip);
+  if (ipRec) {
+    if (now - ipRec.firstAttemptAt > LOGIN_WINDOW_MS) {
+      loginFailedIpMap.delete(ip);
+    } else if (ipRec.count >= MAX_FAILED_IP) {
+      const retryAfter = Math.ceil((ipRec.firstAttemptAt + LOGIN_WINDOW_MS - now) / 1000);
+      return { allowed: false, retryAfterSeconds: Math.max(1, retryAfter) };
+    }
+  }
+
+  // 2. Check Email limit
+  if (emailKey) {
+    const emailRec = loginFailedEmailMap.get(emailKey);
+    if (emailRec) {
+      if (now - emailRec.firstAttemptAt > LOGIN_WINDOW_MS) {
+        loginFailedEmailMap.delete(emailKey);
+      } else if (emailRec.count >= MAX_FAILED_EMAIL) {
+        const retryAfter = Math.ceil((emailRec.firstAttemptAt + LOGIN_WINDOW_MS - now) / 1000);
+        return { allowed: false, retryAfterSeconds: Math.max(1, retryAfter) };
+      }
+    }
+  }
+
+  return { allowed: true };
+}
+
+function recordFailedLogin(ip: string, emailKey: string) {
+  const now = Date.now();
+
+  // Record IP failure
+  const ipRec = loginFailedIpMap.get(ip);
+  if (!ipRec || now - ipRec.firstAttemptAt > LOGIN_WINDOW_MS) {
+    loginFailedIpMap.set(ip, { count: 1, firstAttemptAt: now });
+  } else {
+    ipRec.count++;
+  }
+
+  // Record Email failure
+  if (emailKey) {
+    const emailRec = loginFailedEmailMap.get(emailKey);
+    if (!emailRec || now - emailRec.firstAttemptAt > LOGIN_WINDOW_MS) {
+      loginFailedEmailMap.set(emailKey, { count: 1, firstAttemptAt: now });
+    } else {
+      emailRec.count++;
+    }
+  }
+}
+
+function recordSuccessfulLogin(emailKey: string) {
+  if (emailKey) {
+    loginFailedEmailMap.delete(emailKey);
+  }
+}
+
 // Session authentication resolver
 async function resolveAuth(request: Request): Promise<DbSession | null> {
   const cookieHeader = request.headers.get("cookie");
@@ -145,7 +232,7 @@ export default {
     try {
       const url = new URL(request.url);
       const pathname = url.pathname;
-      const clientIp = request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || "127.0.0.1";
+      const clientIp = getClientIp(request);
 
       // -----------------------------------------------------
       // /api/* ROUTES HANDLING
@@ -155,25 +242,58 @@ export default {
         if (pathname === "/api/auth/login" && request.method === "POST") {
           try {
             const body = await request.json();
-            const { email, password } = body;
-            if (!email || !password) {
+            const emailRaw = body?.email;
+            const passwordRaw = body?.password;
+            const cleanEmail = String(emailRaw || "")
+              .trim()
+              .toLowerCase();
+
+            // Rate limit check SEBELUM memproses login / query database
+            const rateCheck = checkLoginRateLimit(clientIp, cleanEmail);
+            if (!rateCheck.allowed) {
+              console.warn(
+                `[${new Date().toISOString()}] [AUTH RATE-LIMITED] Percobaan login diblokir karena melebihi batas percobaan gagal (IP: ${clientIp}, Email: "${cleanEmail}"). Retry-After: ${rateCheck.retryAfterSeconds}s`,
+              );
+              return jsonResponse(
+                { error: "Terlalu banyak percobaan login gagal. Silakan coba lagi nanti." },
+                429,
+                { "Retry-After": String(rateCheck.retryAfterSeconds || 900) },
+              );
+            }
+
+            if (!emailRaw || !passwordRaw) {
+              recordFailedLogin(clientIp, cleanEmail);
               return jsonResponse({ error: "Email dan password wajib diisi." }, 400);
             }
 
-            const account = await getAccountByEmail(email, true);
+            const account = await getAccountByEmail(cleanEmail, true);
             if (!account || !account.active) {
+              recordFailedLogin(clientIp, cleanEmail);
+              console.warn(
+                `[${new Date().toISOString()}] [AUTH FAILED] Login gagal untuk email: "${cleanEmail}" dari IP: ${clientIp} (Alasan: Akun tidak ditemukan atau nonaktif)`,
+              );
               return jsonResponse({ error: "Email atau password tidak valid." }, 401);
             }
 
-            const check = await verifyPassword(password, account.password || "");
+            const check = await verifyPassword(String(passwordRaw), account.password || "");
             if (!check.valid) {
+              recordFailedLogin(clientIp, cleanEmail);
+              console.warn(
+                `[${new Date().toISOString()}] [AUTH FAILED] Login gagal untuk email: "${cleanEmail}" dari IP: ${clientIp} (Alasan: Password tidak cocok)`,
+              );
               return jsonResponse({ error: "Email atau password tidak valid." }, 401);
             }
+
+            // Login berhasil -> Reset penghitung kegagalan email
+            recordSuccessfulLogin(cleanEmail);
+            console.log(
+              `[${new Date().toISOString()}] [AUTH SUCCESS] Login berhasil untuk email: "${cleanEmail}" (${account.role}) dari IP: ${clientIp}`,
+            );
 
             // Auto-migrate legacy password to bcrypt hash in DB if needed
             if (check.needsRehash) {
               try {
-                const newHash = await hashPassword(password);
+                const newHash = await hashPassword(String(passwordRaw));
                 const client = await getPgClient();
                 if (client) {
                   await client.query("UPDATE accounts SET password = $1 WHERE id = $2", [
@@ -207,7 +327,7 @@ export default {
               200,
               { "Set-Cookie": cookieVal },
             );
-          } catch (err) {
+          } catch {
             return jsonResponse({ error: "Gagal memproses login." }, 400);
           }
         }
@@ -627,6 +747,51 @@ export default {
             if (!body.id || !body.name || !body.email) {
               return jsonResponse({ error: "ID, nama, dan email akun wajib diisi." }, 400);
             }
+
+            const cleanEmail = String(body.email).trim().toLowerCase();
+            body.email = cleanEmail;
+
+            // Cek apakah ini akun baru atau update akun lama
+            const existingAcc = await getAccountByEmail(cleanEmail, false);
+
+            if (!existingAcc) {
+              // Akun baru: WAJIB memiliki password minimal 12 karakter
+              const pwd = body.password ? String(body.password).trim() : "";
+              if (!pwd || pwd.length < 12) {
+                return jsonResponse(
+                  {
+                    error:
+                      "Kata sandi wajib diisi dan minimal 12 karakter untuk pembuatan akun baru.",
+                  },
+                  400,
+                );
+              }
+              if (pwd === "password123" || pwd === "placeholder_not_used") {
+                return jsonResponse(
+                  {
+                    error:
+                      "Kata sandi tidak boleh menggunakan nilai default atau placeholder yang dilarang.",
+                  },
+                  400,
+                );
+              }
+            } else if (body.password) {
+              // Reset / update password: minimal 12 karakter
+              const pwd = String(body.password).trim();
+              if (pwd.length < 12) {
+                return jsonResponse({ error: "Kata sandi baru minimal 12 karakter." }, 400);
+              }
+              if (pwd === "password123" || pwd === "placeholder_not_used") {
+                return jsonResponse(
+                  {
+                    error:
+                      "Kata sandi tidak boleh menggunakan nilai default atau placeholder yang dilarang.",
+                  },
+                  400,
+                );
+              }
+            }
+
             const saved = await upsertAccount(body);
             return jsonResponse({ success: true, account: saved });
           }
