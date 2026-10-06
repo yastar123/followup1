@@ -28,6 +28,7 @@ import {
   getAccountByEmail,
   upsertAccount,
   deleteAccountById,
+  DatabaseUnavailableError,
   createSession,
   getSession,
   deleteSession,
@@ -249,9 +250,10 @@ async function resolveAuth(request: Request): Promise<DbSession | null> {
 
 export default {
   async fetch(request: Request, env: unknown, ctx: unknown) {
+    let pathname = "";
     try {
       const url = new URL(request.url);
-      const pathname = url.pathname;
+      pathname = url.pathname;
       const clientIp = getClientIp(request, ctx);
 
       // -----------------------------------------------------
@@ -347,7 +349,10 @@ export default {
               200,
               { "Set-Cookie": cookieVal },
             );
-          } catch {
+          } catch (err) {
+            if (err instanceof DatabaseUnavailableError) {
+              return jsonResponse({ error: "Layanan database sedang tidak tersedia." }, 503);
+            }
             return jsonResponse({ error: "Gagal memproses login." }, 400);
           }
         }
@@ -843,6 +848,12 @@ export default {
       return await normalizeCatastrophicSsrResponse(response);
     } catch (error) {
       console.error("[Server Error]", error);
+      if (pathname.startsWith("/api/")) {
+        if (error instanceof DatabaseUnavailableError) {
+          return jsonResponse({ error: "Layanan database sedang tidak tersedia." }, 503);
+        }
+        return jsonResponse({ error: "Terjadi kesalahan pada server." }, 500);
+      }
       return new Response(renderErrorPage(), {
         status: 500,
         headers: { "content-type": "text/html; charset=utf-8" },
