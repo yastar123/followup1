@@ -29,6 +29,8 @@ import {
   upsertAccount,
   deleteAccountById,
   DatabaseUnavailableError,
+  ConflictError,
+  ValidationError,
   createSession,
   getSession,
   deleteSession,
@@ -352,6 +354,12 @@ export default {
           } catch (err) {
             if (err instanceof DatabaseUnavailableError) {
               return jsonResponse({ error: "Layanan database sedang tidak tersedia." }, 503);
+            }
+            if (err instanceof ConflictError) {
+              return jsonResponse({ error: err.message || "Data sudah ada." }, 409);
+            }
+            if (err instanceof ValidationError) {
+              return jsonResponse({ error: err.message || "Data tidak valid." }, 400);
             }
             return jsonResponse({ error: "Gagal memproses login." }, 400);
           }
@@ -851,6 +859,15 @@ export default {
       if (pathname.startsWith("/api/")) {
         if (error instanceof DatabaseUnavailableError) {
           return jsonResponse({ error: "Layanan database sedang tidak tersedia." }, 503);
+        }
+        if (error instanceof ConflictError) {
+          return jsonResponse(
+            { error: error.message || "Data sudah ada atau sudah digunakan." },
+            409,
+          );
+        }
+        if (error instanceof ValidationError) {
+          return jsonResponse({ error: error.message || "Data yang dikirim tidak valid." }, 400);
         }
         return jsonResponse({ error: "Terjadi kesalahan pada server." }, 500);
       }

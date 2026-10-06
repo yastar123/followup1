@@ -80,8 +80,7 @@ export interface DbSession {
 }
 
 /**
- * Custom Error untuk menandai kegagalan koneksi atau query database PostgreSQL.
- * Ditangkap oleh server.ts untuk menghasilkan HTTP 503 "Layanan database sedang tidak tersedia."
+ * Custom Error classes terklasifikasi untuk aplikasi
  */
 export class DatabaseUnavailableError extends Error {
   constructor(message = "Layanan database sedang tidak tersedia.") {
@@ -90,8 +89,75 @@ export class DatabaseUnavailableError extends Error {
   }
 }
 
-// In-memory fallback session store when running without PostgreSQL
-const memorySessions = new Map<string, DbSession>();
+export class ConflictError extends Error {
+  constructor(message = "Data sudah ada atau sudah digunakan.") {
+    super(message);
+    this.name = "ConflictError";
+  }
+}
+
+export class ValidationError extends Error {
+  constructor(message = "Data yang dikirim tidak valid.") {
+    super(message);
+    this.name = "ValidationError";
+  }
+}
+
+/**
+ * Helper untuk mendeteksi apakah suatu error merupakan error koneksi database
+ * (bukan error logika query, syntax error, atau constraint violation).
+ */
+export function isConnectionError(err: unknown): boolean {
+  if (!err) return false;
+  if (err instanceof DatabaseUnavailableError) return true;
+
+  const anyErr = err as { code?: string; message?: string };
+  const code = typeof anyErr.code === "string" ? anyErr.code : "";
+  const msg = typeof anyErr.message === "string" ? anyErr.message : "";
+
+  // 1. Kode jaringan Node.js
+  const nodeNetworkCodes = [
+    "ECONNREFUSED",
+    "ETIMEDOUT",
+    "ECONNRESET",
+    "EPIPE",
+    "ENOTFOUND",
+    "ENETUNREACH",
+    "EHOSTUNREACH",
+  ];
+  if (nodeNetworkCodes.includes(code)) {
+    return true;
+  }
+
+  // 2. Kode pg berawalan "08" (Connection Exception)
+  if (code.startsWith("08")) {
+    return true;
+  }
+
+  // 3. Kode pg spesifik shutdown / limit koneksi
+  if (
+    code === "57P01" || // admin_shutdown
+    code === "57P02" || // crash_shutdown
+    code === "57P03" || // cannot_connect_now
+    code === "53300" // too_many_connections
+  ) {
+    return true;
+  }
+
+  // 4. Deteksi dari pesan error umum koneksi
+  const lowerMsg = msg.toLowerCase();
+  if (
+    lowerMsg.includes("connection terminated") ||
+    lowerMsg.includes("terminating connection") ||
+    lowerMsg.includes("timeout exceeded when trying to connect") ||
+    lowerMsg.includes("client has encountered a connection error") ||
+    lowerMsg.includes("connection closed")
+  ) {
+    return true;
+  }
+
+  return false;
+}
 
 export const DEFAULT_ADMIN_EMAIL = (process.env.ADMIN_EMAIL || "admin@acc.co.id")
   .replace(/['"]/g, "")
@@ -104,6 +170,47 @@ let pgClient: Client | null = null;
 let isPgConnected = false;
 let lastPgAttemptTime = 0;
 const PG_RECONNECT_COOLDOWN_MS = 10000;
+
+export function getIsPgConnected(): boolean {
+  return isPgConnected;
+}
+
+export function setIsPgConnectedForTesting(val: boolean) {
+  isPgConnected = val;
+  if (!val) {
+    pgClient = null;
+  }
+}
+
+/**
+ * Helper terpusat untuk menangani error dari query PostgreSQL:
+ * - Jika connection error: set isPgConnected = false, pgClient = null, lempar DatabaseUnavailableError
+ * - Jika constraint error 23505 (unique_violation): lempar ConflictError (HTTP 409)
+ * - Jika constraint error 23503 (foreign_key) / 23514 (check): lempar ValidationError (HTTP 400)
+ * - Selain itu: lempar error aslinya (re-throw) tanpa mengubah isPgConnected
+ */
+export function handleDbError(err: unknown, context = "query"): never {
+  if (isConnectionError(err)) {
+    console.error(`[PostgreSQL] Connection failure in ${context}:`, err);
+    isPgConnected = false;
+    pgClient = null;
+    throw new DatabaseUnavailableError("Layanan database sedang tidak tersedia.");
+  }
+
+  const anyErr = err as { code?: string };
+  if (anyErr?.code === "23505") {
+    console.warn(`[PostgreSQL] Unique violation (23505) in ${context}:`, err);
+    throw new ConflictError("Data sudah ada atau sudah digunakan.");
+  }
+
+  if (anyErr?.code === "23503" || anyErr?.code === "23514") {
+    console.warn(`[PostgreSQL] Constraint violation (${anyErr.code}) in ${context}:`, err);
+    throw new ValidationError("Data tidak valid atau referensi tidak ditemukan.");
+  }
+
+  console.error(`[PostgreSQL] Query error in ${context}:`, err);
+  throw err;
+}
 
 export async function hashPassword(plainText: string): Promise<string> {
   const salt = await bcrypt.genSalt(10);
@@ -223,6 +330,31 @@ async function requirePgClient(): Promise<Client> {
   }
   return client;
 }
+
+export async function cleanExpiredSessions(): Promise<number> {
+  const client = await getPgClient();
+  if (!client || !isPgConnected) return 0;
+  try {
+    const res = await client.query("DELETE FROM sessions WHERE expires_at < CURRENT_TIMESTAMP");
+    const count = res.rowCount ?? 0;
+    if (count > 0) {
+      console.log(`[Session] Cleaned up ${count} expired sessions.`);
+    }
+    return count;
+  } catch (err) {
+    console.error("[Session] Error cleaning expired sessions:", err);
+    return 0;
+  }
+}
+
+// Inisialisasi interval pembersihan sesi kedaluwarsa berkala setiap 6 jam
+const CLEANUP_INTERVAL_MS = 6 * 60 * 60 * 1000;
+const sessionCleanupTimer = setInterval(() => {
+  cleanExpiredSessions().catch((err) => {
+    console.error("[Session Cleanup Timer] Unexpected error:", err);
+  });
+}, CLEANUP_INTERVAL_MS);
+sessionCleanupTimer.unref?.();
 
 export async function initPgTables() {
   if (!pgClient) return;
@@ -371,6 +503,9 @@ export async function initPgTables() {
       `);
     }
 
+    // Pembersihan sesi kadaluarsa awal saat database siap
+    await cleanExpiredSessions();
+
     console.log("[PostgreSQL] Tables & schemas validated safely without data modification.");
   } catch (err) {
     console.error("[PostgreSQL] Error initializing PostgreSQL schemas:", err);
@@ -378,7 +513,7 @@ export async function initPgTables() {
 }
 
 // ---------------------------------------------------------
-// SESSION MANAGEMENT (Server-Side Session Store)
+// SESSION MANAGEMENT (Server-Side Session Store - Database Only)
 // ---------------------------------------------------------
 export async function createSession(
   account: DbAccount,
@@ -401,68 +536,48 @@ export async function createSession(
     createdAt,
   };
 
-  const client = await getPgClient();
-  if (client && isPgConnected) {
-    try {
-      await client.query(
-        `INSERT INTO sessions (token, account_id, role, name, email, expires_at, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-        [token, session.accountId, session.role, session.name, session.email, expiresAt, createdAt],
-      );
-      return session;
-    } catch (err) {
-      console.error("[Session] Error saving session to DB:", err);
-    }
+  const client = await requirePgClient();
+  try {
+    await client.query(
+      `INSERT INTO sessions (token, account_id, role, name, email, expires_at, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)`,
+      [token, session.accountId, session.role, session.name, session.email, expiresAt, createdAt],
+    );
+    return session;
+  } catch (err) {
+    handleDbError(err, "createSession");
   }
-
-  // Memory fallback for session state
-  memorySessions.set(token, session);
-  return session;
 }
 
 export async function getSession(token: string): Promise<DbSession | null> {
   if (!token) return null;
 
-  const client = await getPgClient();
-  if (client && isPgConnected) {
-    try {
-      const res = await client.query(
-        `SELECT token, account_id as "accountId", role, name, email,
-                expires_at as "expiresAt", created_at as "createdAt"
-         FROM sessions
-         WHERE token = $1 AND expires_at > CURRENT_TIMESTAMP`,
-        [token],
-      );
-      if (res.rows.length > 0) {
-        return res.rows[0] as DbSession;
-      }
-      return null;
-    } catch (err) {
-      console.error("[Session] Error retrieving session from DB:", err);
+  const client = await requirePgClient();
+  try {
+    const res = await client.query(
+      `SELECT token, account_id as "accountId", role, name, email,
+              expires_at as "expiresAt", created_at as "createdAt"
+       FROM sessions
+       WHERE token = $1 AND expires_at > CURRENT_TIMESTAMP`,
+      [token],
+    );
+    if (res.rows.length > 0) {
+      return res.rows[0] as DbSession;
     }
+    return null;
+  } catch (err) {
+    handleDbError(err, "getSession");
   }
-
-  const memSession = memorySessions.get(token);
-  if (memSession) {
-    if (new Date(memSession.expiresAt).getTime() > Date.now()) {
-      return memSession;
-    }
-    memorySessions.delete(token);
-  }
-  return null;
 }
 
 export async function deleteSession(token: string): Promise<void> {
   if (!token) return;
-  const client = await getPgClient();
-  if (client && isPgConnected) {
-    try {
-      await client.query("DELETE FROM sessions WHERE token = $1", [token]);
-    } catch {
-      /* ignore */
-    }
+  const client = await requirePgClient();
+  try {
+    await client.query("DELETE FROM sessions WHERE token = $1", [token]);
+  } catch (err) {
+    handleDbError(err, "deleteSession");
   }
-  memorySessions.delete(token);
 }
 
 // ---------------------------------------------------------
@@ -547,10 +662,7 @@ export async function getCustomers(options?: {
 
     return { customers, total };
   } catch (err) {
-    if (err instanceof DatabaseUnavailableError) throw err;
-    console.error("[PostgreSQL] Error fetching customers:", err);
-    isPgConnected = false;
-    throw new DatabaseUnavailableError("Layanan database sedang tidak tersedia.");
+    handleDbError(err, "getCustomers");
   }
 }
 
@@ -594,10 +706,7 @@ export async function getCustomerById(
       createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : new Date().toISOString(),
     };
   } catch (err) {
-    if (err instanceof DatabaseUnavailableError) throw err;
-    console.error("[PostgreSQL] Error getting customer by id:", err);
-    isPgConnected = false;
-    throw new DatabaseUnavailableError("Layanan database sedang tidak tersedia.");
+    handleDbError(err, "getCustomerById");
   }
 }
 
@@ -658,10 +767,7 @@ export async function upsertCustomer(customer: DbCustomer): Promise<DbCustomer> 
     );
     return customer;
   } catch (err) {
-    if (err instanceof DatabaseUnavailableError) throw err;
-    console.error("[PostgreSQL] Error upserting customer:", err);
-    isPgConnected = false;
-    throw new DatabaseUnavailableError("Layanan database sedang tidak tersedia.");
+    handleDbError(err, "upsertCustomer");
   }
 }
 
@@ -749,9 +855,7 @@ export async function upsertCustomersBatch(
       processed += chunk.length;
     } catch (err) {
       await client.query("ROLLBACK").catch(() => {});
-      console.error("[Batch UPSERT] Error in chunk:", err);
-      isPgConnected = false;
-      throw new DatabaseUnavailableError("Layanan database sedang tidak tersedia.");
+      handleDbError(err, "upsertCustomersBatch");
     }
   }
   return { insertedOrUpdated: processed };
@@ -766,10 +870,7 @@ export async function deleteCustomerById(id: string): Promise<boolean> {
     const res = await client.query("DELETE FROM customers WHERE id = $1", [id]);
     return (res.rowCount ?? 0) > 0;
   } catch (err) {
-    if (err instanceof DatabaseUnavailableError) throw err;
-    console.error("[PostgreSQL] Error deleting customer:", err);
-    isPgConnected = false;
-    throw new DatabaseUnavailableError("Layanan database sedang tidak tersedia.");
+    handleDbError(err, "deleteCustomerById");
   }
 }
 
@@ -777,7 +878,7 @@ export async function deleteCustomerById(id: string): Promise<boolean> {
 export async function deleteCustomersBatch(ids: string[]): Promise<number> {
   if (!ids || ids.length === 0) return 0;
   if (ids.length > 200) {
-    throw new Error("Maksimal 200 customer per permintaan penghapusan.");
+    throw new ValidationError("Maksimal 200 customer per permintaan penghapusan.");
   }
 
   const client = await requirePgClient();
@@ -789,9 +890,7 @@ export async function deleteCustomersBatch(ids: string[]): Promise<number> {
     return res.rowCount ?? 0;
   } catch (err) {
     await client.query("ROLLBACK").catch(() => {});
-    console.error("[PostgreSQL] Error batch deleting customers:", err);
-    isPgConnected = false;
-    throw new DatabaseUnavailableError("Layanan database sedang tidak tersedia.");
+    handleDbError(err, "deleteCustomersBatch");
   }
 }
 
@@ -848,10 +947,7 @@ export async function getFollowUps(
       at: r.at ? new Date(r.at).toISOString() : new Date().toISOString(),
     }));
   } catch (err) {
-    if (err instanceof DatabaseUnavailableError) throw err;
-    console.error("[PostgreSQL] Error fetching follow-ups:", err);
-    isPgConnected = false;
-    throw new DatabaseUnavailableError("Layanan database sedang tidak tersedia.");
+    handleDbError(err, "getFollowUps");
   }
 }
 
@@ -871,10 +967,7 @@ export async function getFollowUpById(id: string): Promise<DbFollowUp | null> {
       at: r.at ? new Date(r.at).toISOString() : new Date().toISOString(),
     };
   } catch (err) {
-    if (err instanceof DatabaseUnavailableError) throw err;
-    console.error("[PostgreSQL] Error getting follow up by id:", err);
-    isPgConnected = false;
-    throw new DatabaseUnavailableError("Layanan database sedang tidak tersedia.");
+    handleDbError(err, "getFollowUpById");
   }
 }
 
@@ -907,10 +1000,7 @@ export async function upsertFollowUp(followUp: DbFollowUp): Promise<DbFollowUp> 
     );
     return followUp;
   } catch (err) {
-    if (err instanceof DatabaseUnavailableError) throw err;
-    console.error("[PostgreSQL] Error upserting follow-up:", err);
-    isPgConnected = false;
-    throw new DatabaseUnavailableError("Layanan database sedang tidak tersedia.");
+    handleDbError(err, "upsertFollowUp");
   }
 }
 
@@ -920,10 +1010,7 @@ export async function deleteFollowUpById(id: string): Promise<boolean> {
     const res = await client.query("DELETE FROM follow_ups WHERE id = $1", [id]);
     return (res.rowCount ?? 0) > 0;
   } catch (err) {
-    if (err instanceof DatabaseUnavailableError) throw err;
-    console.error("[PostgreSQL] Error deleting follow up:", err);
-    isPgConnected = false;
-    throw new DatabaseUnavailableError("Layanan database sedang tidak tersedia.");
+    handleDbError(err, "deleteFollowUpById");
   }
 }
 
@@ -936,10 +1023,7 @@ export async function getTemplates(): Promise<DbTemplate[]> {
     const res = await client.query("SELECT id, name, body FROM templates ORDER BY name ASC");
     return res.rows;
   } catch (err) {
-    if (err instanceof DatabaseUnavailableError) throw err;
-    console.error("[PostgreSQL] Error fetching templates:", err);
-    isPgConnected = false;
-    throw new DatabaseUnavailableError("Layanan database sedang tidak tersedia.");
+    handleDbError(err, "getTemplates");
   }
 }
 
@@ -956,10 +1040,7 @@ export async function upsertTemplate(tmpl: DbTemplate): Promise<DbTemplate> {
     );
     return tmpl;
   } catch (err) {
-    if (err instanceof DatabaseUnavailableError) throw err;
-    console.error("[PostgreSQL] Error upserting template:", err);
-    isPgConnected = false;
-    throw new DatabaseUnavailableError("Layanan database sedang tidak tersedia.");
+    handleDbError(err, "upsertTemplate");
   }
 }
 
@@ -969,10 +1050,7 @@ export async function deleteTemplateById(id: string): Promise<boolean> {
     const res = await client.query("DELETE FROM templates WHERE id = $1", [id]);
     return (res.rowCount ?? 0) > 0;
   } catch (err) {
-    if (err instanceof DatabaseUnavailableError) throw err;
-    console.error("[PostgreSQL] Error deleting template:", err);
-    isPgConnected = false;
-    throw new DatabaseUnavailableError("Layanan database sedang tidak tersedia.");
+    handleDbError(err, "deleteTemplateById");
   }
 }
 
@@ -1000,10 +1078,7 @@ export async function getNotes(authorFilter?: string): Promise<DbNote[]> {
       updatedAt: r.updatedAt ? new Date(r.updatedAt).toISOString() : new Date().toISOString(),
     }));
   } catch (err) {
-    if (err instanceof DatabaseUnavailableError) throw err;
-    console.error("[PostgreSQL] Error fetching notes:", err);
-    isPgConnected = false;
-    throw new DatabaseUnavailableError("Layanan database sedang tidak tersedia.");
+    handleDbError(err, "getNotes");
   }
 }
 
@@ -1024,10 +1099,7 @@ export async function getNoteById(id: string): Promise<DbNote | null> {
       updatedAt: r.updatedAt ? new Date(r.updatedAt).toISOString() : new Date().toISOString(),
     };
   } catch (err) {
-    if (err instanceof DatabaseUnavailableError) throw err;
-    console.error("[PostgreSQL] Error getting note by id:", err);
-    isPgConnected = false;
-    throw new DatabaseUnavailableError("Layanan database sedang tidak tersedia.");
+    handleDbError(err, "getNoteById");
   }
 }
 
@@ -1053,10 +1125,7 @@ export async function upsertNote(note: DbNote): Promise<DbNote> {
     );
     return note;
   } catch (err) {
-    if (err instanceof DatabaseUnavailableError) throw err;
-    console.error("[PostgreSQL] Error upserting note:", err);
-    isPgConnected = false;
-    throw new DatabaseUnavailableError("Layanan database sedang tidak tersedia.");
+    handleDbError(err, "upsertNote");
   }
 }
 
@@ -1066,10 +1135,7 @@ export async function deleteNoteById(id: string): Promise<boolean> {
     const res = await client.query("DELETE FROM notes WHERE id = $1", [id]);
     return (res.rowCount ?? 0) > 0;
   } catch (err) {
-    if (err instanceof DatabaseUnavailableError) throw err;
-    console.error("[PostgreSQL] Error deleting note:", err);
-    isPgConnected = false;
-    throw new DatabaseUnavailableError("Layanan database sedang tidak tersedia.");
+    handleDbError(err, "deleteNoteById");
   }
 }
 
@@ -1091,10 +1157,7 @@ export async function getAccounts(includePassword = false): Promise<DbAccount[]>
       createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : new Date().toISOString(),
     }));
   } catch (err) {
-    if (err instanceof DatabaseUnavailableError) throw err;
-    console.error("[PostgreSQL] Error getting accounts:", err);
-    isPgConnected = false;
-    throw new DatabaseUnavailableError("Layanan database sedang tidak tersedia.");
+    handleDbError(err, "getAccounts");
   }
 }
 
@@ -1123,10 +1186,7 @@ export async function getAccountByEmail(
     }
     return null;
   } catch (err) {
-    if (err instanceof DatabaseUnavailableError) throw err;
-    console.error("[PostgreSQL] Error getting account by email:", err);
-    isPgConnected = false;
-    throw new DatabaseUnavailableError("Layanan database sedang tidak tersedia.");
+    handleDbError(err, "getAccountByEmail");
   }
 }
 
@@ -1204,10 +1264,7 @@ export async function upsertAccount(
       createdAt: account.createdAt || new Date().toISOString(),
     };
   } catch (err) {
-    if (err instanceof DatabaseUnavailableError) throw err;
-    console.error("[PostgreSQL] Error upserting account:", err);
-    isPgConnected = false;
-    throw new DatabaseUnavailableError("Layanan database sedang tidak tersedia.");
+    handleDbError(err, "upsertAccount");
   }
 }
 
@@ -1217,10 +1274,7 @@ export async function deleteAccountById(id: string): Promise<boolean> {
     const res = await client.query("DELETE FROM accounts WHERE id = $1", [id]);
     return (res.rowCount ?? 0) > 0;
   } catch (err) {
-    if (err instanceof DatabaseUnavailableError) throw err;
-    console.error("[PostgreSQL] Error deleting account:", err);
-    isPgConnected = false;
-    throw new DatabaseUnavailableError("Layanan database sedang tidak tersedia.");
+    handleDbError(err, "deleteAccountById");
   }
 }
 
