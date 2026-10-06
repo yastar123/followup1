@@ -24,7 +24,7 @@ export function normalizeOwner(owner?: string | null): string {
     return "belum ditugaskan";
   }
   return trimmed
-    .replace(/^\s*sales\s*[·•\-\.\:\s]\s*/i, "")
+    .replace(/^\s*sales\s*[·•\-.:\s]\s*/i, "")
     .trim()
     .toLowerCase();
 }
@@ -47,4 +47,3 @@ export function isMatchSales(target?: string | null, salesUser?: string | null):
   // Pengecekan persis (strict equality)
   return cleanTarget === cleanUser;
 }
-

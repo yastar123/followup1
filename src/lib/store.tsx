@@ -857,5 +857,3 @@ export const waBusinessLink = (phone: string, message: string) =>
 
 export { normalizeOwner, isMatchSales };
 export const normalizeSalesName = normalizeOwner;
-
-

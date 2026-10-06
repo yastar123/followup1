@@ -10,6 +10,7 @@ import {
   Droplets,
   LogOut,
   ShieldCheck,
+  ShieldAlert,
   SlidersHorizontal,
 } from "lucide-react";
 import type { ReactNode } from "react";
@@ -67,8 +68,41 @@ export function AppShell({
   actions?: ReactNode;
   children: ReactNode;
 }) {
-  const { user, logout, dbStatus, impersonating, stopImpersonate } = useStore();
+  const { user, role: userRole, logout, dbStatus, impersonating, stopImpersonate } = useStore();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
+
+  // Route Guard: Cegah pengguna dengan role sales mengakses halaman admin
+  if (role === "admin" && userRole !== "admin" && !impersonating) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background px-4">
+        <div className="max-w-md w-full surface-card p-6 border border-destructive/30 text-center shadow-lg rounded-xl">
+          <div className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10 text-destructive mx-auto mb-4">
+            <ShieldAlert className="size-6" />
+          </div>
+          <h1 className="text-xl font-bold text-foreground">Akses Ditolak (403)</h1>
+          <p className="mt-2 text-sm text-muted-foreground">
+            Halaman ini khusus untuk Administrator. Anda saat ini login sebagai Petugas Sales (
+            <strong>{user}</strong>).
+          </p>
+          <div className="mt-6 flex flex-col gap-2">
+            <Link
+              to="/sales"
+              className="inline-flex items-center justify-center rounded-md bg-primary px-4 py-2.5 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+            >
+              Kembali ke Dashboard Sales
+            </Link>
+            <button
+              onClick={() => logout()}
+              className="inline-flex items-center justify-center rounded-md border border-input bg-background px-4 py-2 text-sm font-medium text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Keluar dari Akun
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const nav = role === "sales" ? salesNav : adminNav;
 
   return (

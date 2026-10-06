@@ -304,9 +304,7 @@ function AksesSalesPage() {
               isMatchSales(c.owner, a.name),
             ).length;
 
-            const salesFollowUps = filteredFollowUps.filter((f) =>
-              isMatchSales(f.by, a.name),
-            );
+            const salesFollowUps = filteredFollowUps.filter((f) => isMatchSales(f.by, a.name));
             const salesFuCount = salesFollowUps.length;
 
             // Follow-up conversion summary

@@ -463,8 +463,7 @@ function RekapPage() {
                     <td className="px-5 py-3.5">
                       <span
                         className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                          normalizeOwner(c.owner) &&
-                          normalizeOwner(c.owner) !== "belum ditugaskan"
+                          normalizeOwner(c.owner) && normalizeOwner(c.owner) !== "belum ditugaskan"
                             ? "bg-primary/10 text-primary"
                             : "bg-muted text-muted-foreground"
                         }`}

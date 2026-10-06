@@ -12,14 +12,17 @@ import {
   deleteCustomerById,
   deleteCustomersBatch,
   getFollowUps,
+  getFollowUpById,
   upsertFollowUp,
   deleteFollowUpById,
   getTemplates,
   upsertTemplate,
   deleteTemplateById,
   getNotes,
+  getNoteById,
   upsertNote,
   deleteNoteById,
+  normalizeOwner,
   getAccounts,
   getAccountByEmail,
   upsertAccount,
@@ -317,10 +320,35 @@ export default {
             if (!body.id || !body.name || !body.phone) {
               return jsonResponse({ error: "Field id, nama, dan nomor telepon wajib diisi." }, 400);
             }
+
             if (session.role === "sales") {
-              // Sales can only assign to themselves
-              body.owner = session.name;
+              const existing = await getCustomerById(body.id);
+              if (existing) {
+                if (normalizeOwner(existing.owner) !== normalizeOwner(session.name)) {
+                  console.warn(
+                    `[${new Date().toISOString()}] [UNAUTHORIZED ACCESS] Sales "${session.name}" mencoba mengubah data customer ID ${body.id} milik "${existing.owner}".`,
+                  );
+                  return jsonResponse(
+                    { error: "Anda tidak berhak mengubah data customer milik petugas sales lain." },
+                    403,
+                  );
+                }
+                // Sales tidak dapat memindahkan kepemilikan customer
+                body.owner = existing.owner;
+              } else {
+                body.owner = session.name.startsWith("Sales · ")
+                  ? session.name
+                  : `Sales · ${session.name}`;
+              }
+            } else if (session.role === "admin") {
+              const existing = await getCustomerById(body.id);
+              if (existing && existing.owner !== body.owner) {
+                console.log(
+                  `[${new Date().toISOString()}] [OWNER CHANGED] Customer ID ${body.id} ("${body.name}") owner diubah dari "${existing.owner}" menjadi "${body.owner}" oleh Admin "${session.name}".`,
+                );
+              }
             }
+
             const saved = await upsertCustomer(body);
             return jsonResponse({ success: true, customer: saved });
           }
@@ -404,6 +432,9 @@ export default {
               400,
             );
           }
+          console.log(
+            `[${new Date().toISOString()}] [BATCH DELETE CUSTOMERS] ${ids.length} customer dihapus oleh Admin "${session.name}". IDs: ${ids.slice(0, 10).join(", ")}${ids.length > 10 ? "..." : ""}`,
+          );
           const deleted = await deleteCustomersBatch(ids);
           return jsonResponse({ success: true, deletedCount: deleted });
         }
@@ -424,6 +455,9 @@ export default {
               if (session.role !== "admin") {
                 return jsonResponse({ error: "Hanya Admin yang berhak menghapus customer." }, 403);
               }
+              console.log(
+                `[${new Date().toISOString()}] [DELETE CUSTOMER] Customer ID ${custId} dihapus oleh Admin "${session.name}".`,
+              );
               const success = await deleteCustomerById(custId);
               return jsonResponse({ success });
             }
@@ -434,7 +468,8 @@ export default {
         if (pathname === "/api/followups") {
           if (request.method === "GET") {
             const customerId = url.searchParams.get("customerId") || undefined;
-            const res = await getFollowUps(customerId);
+            const ownerFilter = session.role === "sales" ? session.name : undefined;
+            const res = await getFollowUps(customerId, ownerFilter);
             return jsonResponse(res);
           }
           if (request.method === "POST") {
@@ -442,7 +477,29 @@ export default {
             if (!body.id || !body.customerId) {
               return jsonResponse({ error: "ID follow-up dan customerId wajib diisi." }, 400);
             }
-            if (!body.by) body.by = session.name;
+            if (session.role === "sales") {
+              // Sales dipaksa menggunakan nama sesi sendiri
+              body.by = session.name;
+              // Validasi bahwa customer milik sales ini
+              const targetCust = await getCustomerById(body.customerId);
+              if (
+                !targetCust ||
+                normalizeOwner(targetCust.owner) !== normalizeOwner(session.name)
+              ) {
+                return jsonResponse(
+                  {
+                    error:
+                      "Anda hanya dapat mencatat follow up untuk customer yang ditugaskan kepada Anda.",
+                  },
+                  403,
+                );
+              }
+            } else if (session.role === "admin") {
+              // Admin boleh mengirim by (impersonasi sales), fallback ke session.name jika kosong
+              if (!body.by || !body.by.trim()) {
+                body.by = session.name;
+              }
+            }
             const saved = await upsertFollowUp(body);
             return jsonResponse({ success: true, followUp: saved });
           }
@@ -450,6 +507,28 @@ export default {
 
         if (pathname.startsWith("/api/followups/") && request.method === "DELETE") {
           const fuId = pathname.replace("/api/followups/", "").trim();
+          const existing = await getFollowUpById(fuId);
+          if (!existing) {
+            return jsonResponse({ error: "Data follow up tidak ditemukan." }, 404);
+          }
+          if (
+            session.role !== "admin" &&
+            normalizeOwner(existing.by) !== normalizeOwner(session.name)
+          ) {
+            console.warn(
+              `[${new Date().toISOString()}] [UNAUTHORIZED DELETE] User "${session.name}" (${session.role}) mencoba menghapus follow up ${fuId} milik "${existing.by}".`,
+            );
+            return jsonResponse(
+              {
+                error:
+                  "Anda tidak memiliki hak untuk menghapus riwayat follow up milik pengguna lain.",
+              },
+              403,
+            );
+          }
+          console.log(
+            `[${new Date().toISOString()}] [DELETE FOLLOWUP] Follow up ID ${fuId} (Customer: ${existing.customerId}, By: ${existing.by}) dihapus oleh "${session.name}" (${session.role}).`,
+          );
           const success = await deleteFollowUpById(fuId);
           return jsonResponse({ success });
         }
@@ -488,7 +567,8 @@ export default {
         // 10. Notes API
         if (pathname === "/api/notes") {
           if (request.method === "GET") {
-            const list = await getNotes();
+            const authorFilter = session.role === "sales" ? session.name : undefined;
+            const list = await getNotes(authorFilter);
             return jsonResponse(list);
           }
           if (request.method === "POST") {
@@ -496,7 +576,13 @@ export default {
             if (!body.id || !body.title) {
               return jsonResponse({ error: "ID dan judul catatan wajib diisi." }, 400);
             }
-            if (!body.by) body.by = session.name;
+            if (session.role === "sales") {
+              body.by = session.name;
+            } else if (session.role === "admin") {
+              if (!body.by || !body.by.trim()) {
+                body.by = session.name;
+              }
+            }
             const saved = await upsertNote(body);
             return jsonResponse({ success: true, note: saved });
           }
@@ -504,6 +590,25 @@ export default {
 
         if (pathname.startsWith("/api/notes/") && request.method === "DELETE") {
           const noteId = pathname.replace("/api/notes/", "").trim();
+          const existing = await getNoteById(noteId);
+          if (!existing) {
+            return jsonResponse({ error: "Catatan tidak ditemukan." }, 404);
+          }
+          if (
+            session.role !== "admin" &&
+            normalizeOwner(existing.by) !== normalizeOwner(session.name)
+          ) {
+            console.warn(
+              `[${new Date().toISOString()}] [UNAUTHORIZED DELETE] User "${session.name}" (${session.role}) mencoba menghapus catatan ${noteId} milik "${existing.by}".`,
+            );
+            return jsonResponse(
+              { error: "Anda tidak memiliki hak untuk menghapus catatan milik pengguna lain." },
+              403,
+            );
+          }
+          console.log(
+            `[${new Date().toISOString()}] [DELETE NOTE] Catatan ID ${noteId} ("${existing.title}", By: ${existing.by}) dihapus oleh "${session.name}" (${session.role}).`,
+          );
           const success = await deleteNoteById(noteId);
           return jsonResponse({ success });
         }

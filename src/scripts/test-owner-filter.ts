@@ -64,7 +64,11 @@ function runTests() {
   // TEST (c): Customer berformat "Rio" polos dan "Sales · Rio" sama-sama dikenali milik Rio
   const custPlainRio: MockCustomer = { id: "c_plain", name: "Test Plain", owner: "Rio" };
   const custPrefixRio: MockCustomer = { id: "c_prefix", name: "Test Prefix", owner: "Sales · Rio" };
-  const custSpacedRio: MockCustomer = { id: "c_spaced", name: "Test Spaced", owner: "Sales  ·  rio" };
+  const custSpacedRio: MockCustomer = {
+    id: "c_spaced",
+    name: "Test Spaced",
+    owner: "Sales  ·  rio",
+  };
 
   const matchPlain = isMatchSales(custPlainRio.owner, "Rio");
   const matchPrefix = isMatchSales(custPrefixRio.owner, "Rio");
@@ -88,7 +92,11 @@ function runTests() {
   if (!passD) allPassed = false;
 
   // TEST (e): "Belum ditugaskan" tidak pernah bocor ke sales
-  const unassignedCustomer: MockCustomer = { id: "u_1", name: "Unassigned", owner: "Belum ditugaskan" };
+  const unassignedCustomer: MockCustomer = {
+    id: "u_1",
+    name: "Unassigned",
+    owner: "Belum ditugaskan",
+  };
   const emptyCustomer: MockCustomer = { id: "u_2", name: "Empty", owner: "" };
   const unassignedMatchRio = isMatchSales(unassignedCustomer.owner, "Rio");
   const emptyMatchRio = isMatchSales(emptyCustomer.owner, "Rio");

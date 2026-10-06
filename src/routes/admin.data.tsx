@@ -301,9 +301,7 @@ function DataPage() {
     return Array.from(set);
   }, [customers]);
 
-  const assignedCount = staged.filter(
-    (r) => normalizeOwner(r.owner) !== "belum ditugaskan",
-  ).length;
+  const assignedCount = staged.filter((r) => normalizeOwner(r.owner) !== "belum ditugaskan").length;
 
   const assignedDbCount = useMemo(
     () => customers.filter((c) => normalizeOwner(c.owner) !== "belum ditugaskan").length,

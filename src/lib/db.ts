@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import { Client } from "pg";
 import bcrypt from "bcryptjs";
-import { normalizeOwner } from "./utils";
+export { normalizeOwner } from "./utils";
 
 export interface DbCustomer {
   id: string;
@@ -836,20 +836,51 @@ export async function deleteCustomersBatch(ids: string[]): Promise<number> {
 // ---------------------------------------------------------
 // FOLLOW UPS (GRANULAR)
 // ---------------------------------------------------------
-export async function getFollowUps(customerId?: string): Promise<DbFollowUp[]> {
+export async function getFollowUps(
+  customerId?: string,
+  ownerFilter?: string,
+): Promise<DbFollowUp[]> {
   const client = await getPgClient();
   if (client && isPgConnected) {
     try {
-      let query = `
-        SELECT id, customer_id as "customerId", channel, outcome, interest, reason, next_action as "nextAction", by, at
-        FROM follow_ups
-      `;
+      const conditions: string[] = [];
       const params: unknown[] = [];
+      let pIdx = 1;
+
+      let query = `
+        SELECT f.id, f.customer_id as "customerId", f.channel, f.outcome, f.interest,
+               f.reason, f.next_action as "nextAction", f.by, f.at
+        FROM follow_ups f
+      `;
+
+      if (ownerFilter && ownerFilter.trim()) {
+        const norm = normalizeOwner(ownerFilter);
+        query += " JOIN customers c ON f.customer_id = c.id";
+        if (norm === "belum ditugaskan") {
+          conditions.push(`(
+            c.owner IS NULL OR
+            TRIM(c.owner) = '' OR
+            LOWER(TRIM(c.owner)) = 'belum ditugaskan' OR
+            LOWER(TRIM(c.owner)) = '-'
+          )`);
+        } else {
+          conditions.push(
+            `LOWER(TRIM(REGEXP_REPLACE(c.owner, '^\\s*Sales\\s*[·•\\-\\.\\:\\s]\\s*', '', 'i'))) = $${pIdx++}`,
+          );
+          params.push(norm);
+        }
+      }
+
       if (customerId) {
-        query += " WHERE customer_id = $1";
+        conditions.push(`f.customer_id = $${pIdx++}`);
         params.push(customerId);
       }
-      query += " ORDER BY at DESC";
+
+      if (conditions.length > 0) {
+        query += ` WHERE ${conditions.join(" AND ")}`;
+      }
+
+      query += " ORDER BY f.at DESC";
       const res = await client.query(query, params);
       return res.rows.map((r) => ({
         ...r,
@@ -859,11 +890,46 @@ export async function getFollowUps(customerId?: string): Promise<DbFollowUp[]> {
       console.error("[PostgreSQL] Error fetching follow-ups:", err);
     }
   }
+
   const fileData = readLocalJsonFile("getFollowUps:" + (customerId || "all"));
-  if (customerId) {
-    return fileData.followUps.filter((f) => f.customerId === customerId);
+  let list = fileData.followUps;
+  if (ownerFilter && ownerFilter.trim()) {
+    const targetNorm = normalizeOwner(ownerFilter);
+    const custMap = new Map(fileData.customers.map((c) => [c.id, c]));
+    list = list.filter((f) => {
+      const c = custMap.get(f.customerId);
+      return c && normalizeOwner(c.owner) === targetNorm;
+    });
   }
-  return fileData.followUps;
+  if (customerId) {
+    list = list.filter((f) => f.customerId === customerId);
+  }
+  return list;
+}
+
+export async function getFollowUpById(id: string): Promise<DbFollowUp | null> {
+  if (!id) return null;
+  const client = await getPgClient();
+  if (client && isPgConnected) {
+    try {
+      const res = await client.query(
+        `SELECT id, customer_id as "customerId", channel, outcome, interest, reason, next_action as "nextAction", by, at
+         FROM follow_ups WHERE id = $1 LIMIT 1`,
+        [id],
+      );
+      if (res.rows.length === 0) return null;
+      const r = res.rows[0];
+      return {
+        ...r,
+        at: r.at ? new Date(r.at).toISOString() : new Date().toISOString(),
+      };
+    } catch (err) {
+      console.error("[PostgreSQL] Error getting follow up by id:", err);
+    }
+  }
+
+  const fileData = readLocalJsonFile("getFollowUpById:" + id);
+  return fileData.followUps.find((f) => f.id === id) || null;
 }
 
 export async function upsertFollowUp(followUp: DbFollowUp): Promise<DbFollowUp> {
@@ -971,15 +1037,22 @@ export async function deleteTemplateById(id: string): Promise<boolean> {
 // ---------------------------------------------------------
 // NOTES (GRANULAR)
 // ---------------------------------------------------------
-export async function getNotes(): Promise<DbNote[]> {
+export async function getNotes(authorFilter?: string): Promise<DbNote[]> {
   const client = await getPgClient();
   if (client && isPgConnected) {
     try {
-      const res = await client.query(`
+      let query = `
         SELECT id, title, body, by, created_at as "createdAt", updated_at as "updatedAt"
         FROM notes
-        ORDER BY updated_at DESC
-      `);
+      `;
+      const params: unknown[] = [];
+      if (authorFilter && authorFilter.trim()) {
+        const norm = normalizeOwner(authorFilter);
+        query += ` WHERE LOWER(TRIM(REGEXP_REPLACE(by, '^\\s*Sales\\s*[·•\\-\\.\\:\\s]\\s*', '', 'i'))) = $1`;
+        params.push(norm);
+      }
+      query += " ORDER BY updated_at DESC";
+      const res = await client.query(query, params);
       return res.rows.map((r) => ({
         ...r,
         createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : new Date().toISOString(),
@@ -990,7 +1063,36 @@ export async function getNotes(): Promise<DbNote[]> {
     }
   }
   const fileData = readLocalJsonFile("getNotes");
+  if (authorFilter && authorFilter.trim()) {
+    const targetNorm = normalizeOwner(authorFilter);
+    return fileData.notes.filter((n) => normalizeOwner(n.by) === targetNorm);
+  }
   return fileData.notes;
+}
+
+export async function getNoteById(id: string): Promise<DbNote | null> {
+  if (!id) return null;
+  const client = await getPgClient();
+  if (client && isPgConnected) {
+    try {
+      const res = await client.query(
+        `SELECT id, title, body, by, created_at as "createdAt", updated_at as "updatedAt"
+         FROM notes WHERE id = $1 LIMIT 1`,
+        [id],
+      );
+      if (res.rows.length === 0) return null;
+      const r = res.rows[0];
+      return {
+        ...r,
+        createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : new Date().toISOString(),
+        updatedAt: r.updatedAt ? new Date(r.updatedAt).toISOString() : new Date().toISOString(),
+      };
+    } catch {
+      /* ignore */
+    }
+  }
+  const fileData = readLocalJsonFile("getNoteById:" + id);
+  return fileData.notes.find((n) => n.id === id) || null;
 }
 
 export async function upsertNote(note: DbNote): Promise<DbNote> {
@@ -1247,9 +1349,9 @@ export async function getFullState(
     // Return all customer rows for this user role
   });
 
-  const followUps = await getFollowUps();
+  const followUps = await getFollowUps(undefined, ownerFilter);
   const templates = await getTemplates();
-  const notes = await getNotes();
+  const notes = await getNotes(ownerFilter);
   const accounts = isSales ? [] : ((await getAccounts(false)) as DbAccountPublic[]);
 
   return {
