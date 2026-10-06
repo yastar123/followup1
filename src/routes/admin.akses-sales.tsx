@@ -300,12 +300,12 @@ function AksesSalesPage() {
             const userKey = `Sales · ${firstName}`;
 
             // Match customers and follow ups for this sales
-            const salesCustCount = filteredCustomers.filter(
-              (c) => isMatchSales(c.owner, userKey) || isMatchSales(c.owner, a.name),
+            const salesCustCount = filteredCustomers.filter((c) =>
+              isMatchSales(c.owner, a.name),
             ).length;
 
-            const salesFollowUps = filteredFollowUps.filter(
-              (f) => isMatchSales(f.by, userKey) || isMatchSales(f.by, a.name),
+            const salesFollowUps = filteredFollowUps.filter((f) =>
+              isMatchSales(f.by, a.name),
             );
             const salesFuCount = salesFollowUps.length;
 

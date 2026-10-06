@@ -35,7 +35,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import { useStore, renderTemplate, type Account, type Template, type Customer } from "@/lib/store";
+import {
+  useStore,
+  isMatchSales,
+  renderTemplate,
+  type Account,
+  type Template,
+  type Customer,
+} from "@/lib/store";
 
 export const Route = createFileRoute("/admin/pengaturan-broadcast")({
   head: () => ({
@@ -432,9 +439,8 @@ function PengaturanBroadcastPage() {
                   config.templateIds.length > 0 && config.templateIds.length < templates.length;
 
                 const defaultTemplate = templates.find((t) => t.id === config.defaultId);
-                const assignedCustomersCount = customers.filter(
-                  (c) =>
-                    c.owner === account.name || c.owner === `Sales · ${account.name.split(" ")[0]}`,
+                const assignedCustomersCount = customers.filter((c) =>
+                  isMatchSales(c.owner, account.name),
                 ).length;
 
                 return (

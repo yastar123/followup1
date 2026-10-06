@@ -14,7 +14,7 @@ import { AppShell } from "@/components/AppShell";
 import { Pager } from "@/components/Pager";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useStore } from "@/lib/store";
+import { useStore, normalizeOwner, isMatchSales } from "@/lib/store";
 
 export const Route = createFileRoute("/admin/rekap")({
   head: () => ({
@@ -37,22 +37,18 @@ export const Route = createFileRoute("/admin/rekap")({
 
 const PAGE_SIZE = 10;
 
-const normalizeSalesName = (name?: string) => {
-  if (!name) return "";
-  return name.replace(/^Sales\s*[·\-\s]\s*/i, "").trim();
+const displayOwner = (owner?: string) => {
+  const clean = normalizeOwner(owner);
+  if (!clean || clean === "belum ditugaskan") return "Belum ditugaskan";
+  return clean.charAt(0).toUpperCase() + clean.slice(1);
 };
 
 const matchOwner = (customerOwner: string | undefined, targetSales: string) => {
   if (targetSales === "all") return true;
-  const cleanOwner = normalizeSalesName(customerOwner);
   if (targetSales === "unassigned") {
-    return !cleanOwner || cleanOwner === "Belum ditugaskan" || cleanOwner === "-";
+    return normalizeOwner(customerOwner) === "belum ditugaskan";
   }
-  const cleanTarget = normalizeSalesName(targetSales);
-  return (
-    cleanOwner.toLowerCase() === cleanTarget.toLowerCase() ||
-    (customerOwner || "").toLowerCase() === targetSales.toLowerCase()
-  );
+  return isMatchSales(customerOwner, targetSales);
 };
 
 function RekapPage() {
@@ -70,7 +66,7 @@ function RekapPage() {
   const salesList = useMemo(() => {
     const list = accounts
       .filter((a) => a.role === "sales")
-      .map((a) => normalizeSalesName(a.name))
+      .map((a) => displayOwner(a.name))
       .filter(Boolean);
     return Array.from(new Set(list)).sort((a, b) => a.localeCompare(b));
   }, [accounts]);
@@ -103,7 +99,7 @@ function RekapPage() {
           c.segment,
           c.handling,
           c.owner,
-          normalizeSalesName(c.owner),
+          normalizeOwner(c.owner),
         ]
           .filter(Boolean)
           .join(" ")
@@ -467,13 +463,13 @@ function RekapPage() {
                     <td className="px-5 py-3.5">
                       <span
                         className={`inline-flex items-center px-2 py-0.5 rounded text-xs font-medium ${
-                          normalizeSalesName(c.owner) &&
-                          normalizeSalesName(c.owner) !== "Belum ditugaskan"
+                          normalizeOwner(c.owner) &&
+                          normalizeOwner(c.owner) !== "belum ditugaskan"
                             ? "bg-primary/10 text-primary"
                             : "bg-muted text-muted-foreground"
                         }`}
                       >
-                        {normalizeSalesName(c.owner) || "Belum ditugaskan"}
+                        {displayOwner(c.owner)}
                       </span>
                     </td>
                     <td className="px-5 py-3.5 text-center">

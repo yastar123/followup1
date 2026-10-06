@@ -68,7 +68,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { useStore, type Customer } from "@/lib/store";
+import { useStore, normalizeOwner, isMatchSales, type Customer } from "@/lib/store";
 
 export const Route = createFileRoute("/admin/data")({
   head: () => ({
@@ -301,10 +301,12 @@ function DataPage() {
     return Array.from(set);
   }, [customers]);
 
-  const assignedCount = staged.filter((r) => r.owner !== "Belum ditugaskan").length;
+  const assignedCount = staged.filter(
+    (r) => normalizeOwner(r.owner) !== "belum ditugaskan",
+  ).length;
 
   const assignedDbCount = useMemo(
-    () => customers.filter((c) => c.owner && c.owner !== "Belum ditugaskan").length,
+    () => customers.filter((c) => normalizeOwner(c.owner) !== "belum ditugaskan").length,
     [customers],
   );
 
@@ -446,8 +448,8 @@ function DataPage() {
         filterSales === "Semua"
           ? true
           : filterSales === "Belum ditugaskan"
-            ? c.owner === "Belum ditugaskan" || !c.owner
-            : c.owner.toLowerCase().includes(filterSales.toLowerCase());
+            ? normalizeOwner(c.owner) === "belum ditugaskan"
+            : isMatchSales(c.owner, filterSales);
       const matchSegment = filterSegment === "Semua" || c.segment === filterSegment;
 
       return matchSearch && matchStatus && matchSales && matchSegment;

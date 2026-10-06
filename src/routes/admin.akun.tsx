@@ -62,7 +62,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useStore, type Role, type Account } from "@/lib/store";
+import { useStore, isMatchSales, type Role, type Account } from "@/lib/store";
 import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/admin/akun")({
@@ -152,24 +152,7 @@ function AkunPage() {
     const counts: Record<string, number> = {};
     for (const a of accounts) {
       if (a.role !== "sales") continue;
-
-      const nameLower = a.name.toLowerCase();
-      const emailLower = a.email.toLowerCase();
-      const firstNameLower = a.name.split(" ")[0]?.toLowerCase() ?? "";
-
-      const assigned = customers.filter((c) => {
-        if (!c.owner || c.owner === "Belum ditugaskan") return false;
-        const ownerLower = c.owner.toLowerCase();
-
-        if (ownerLower === nameLower || ownerLower === emailLower) return true;
-        if (ownerLower.includes(`sales · ${nameLower}`)) return true;
-        if (firstNameLower && ownerLower.includes(`sales · ${firstNameLower}`)) return true;
-        if (ownerLower.includes(nameLower)) return true;
-        if (ownerLower.includes(emailLower)) return true;
-
-        return false;
-      });
-
+      const assigned = customers.filter((c) => isMatchSales(c.owner, a.name));
       counts[a.id] = assigned.length;
       counts[a.name] = assigned.length;
     }

@@ -2,6 +2,7 @@ import fs from "fs";
 import path from "path";
 import { Client } from "pg";
 import bcrypt from "bcryptjs";
+import { normalizeOwner } from "./utils";
 
 export interface DbCustomer {
   id: string;
@@ -453,8 +454,20 @@ export async function getCustomers(options?: {
       let pIdx = 1;
 
       if (options?.owner && options.owner.trim()) {
-        conditions.push(`LOWER(owner) = LOWER($${pIdx++})`);
-        params.push(options.owner.trim());
+        const norm = normalizeOwner(options.owner);
+        if (norm === "belum ditugaskan") {
+          conditions.push(`(
+            owner IS NULL OR
+            TRIM(owner) = '' OR
+            LOWER(TRIM(owner)) = 'belum ditugaskan' OR
+            LOWER(TRIM(owner)) = '-'
+          )`);
+        } else {
+          conditions.push(
+            `LOWER(TRIM(REGEXP_REPLACE(owner, '^\\s*Sales\\s*[·•\\-\\.\\:\\s]\\s*', '', 'i'))) = $${pIdx++}`,
+          );
+          params.push(norm);
+        }
       }
 
       if (options?.search && options.search.trim()) {
@@ -511,11 +524,17 @@ export async function getCustomers(options?: {
   }
 
   // Fallback to local JSON read
-  const fileData = readLocalJsonFile();
+  const fileData = readLocalJsonFile("getCustomers");
   let list = fileData.customers || [];
   if (options?.owner && options.owner.trim()) {
-    const o = options.owner.trim().toLowerCase();
-    list = list.filter((c) => c.owner?.trim().toLowerCase() === o);
+    const targetNorm = normalizeOwner(options.owner);
+    list = list.filter((c) => {
+      const cNorm = normalizeOwner(c.owner);
+      if (targetNorm === "belum ditugaskan") {
+        return cNorm === "belum ditugaskan";
+      }
+      return cNorm === targetNorm;
+    });
   }
   if (options?.search && options.search.trim()) {
     const s = options.search.trim().toLowerCase();
@@ -552,8 +571,18 @@ export async function getCustomerById(
       `;
       const params: unknown[] = [id];
       if (ownerFilter && ownerFilter.trim()) {
-        query += " AND LOWER(owner) = LOWER($2)";
-        params.push(ownerFilter.trim());
+        const norm = normalizeOwner(ownerFilter);
+        if (norm === "belum ditugaskan") {
+          query += ` AND (
+            owner IS NULL OR
+            TRIM(owner) = '' OR
+            LOWER(TRIM(owner)) = 'belum ditugaskan' OR
+            LOWER(TRIM(owner)) = '-'
+          )`;
+        } else {
+          query += ` AND LOWER(TRIM(REGEXP_REPLACE(owner, '^\\s*Sales\\s*[·•\\-\\.\\:\\s]\\s*', '', 'i'))) = $2`;
+          params.push(norm);
+        }
       }
       const res = await client.query(query, params);
       if (res.rows.length === 0) return null;
@@ -568,11 +597,17 @@ export async function getCustomerById(
     }
   }
 
-  const fileData = readLocalJsonFile();
+  const fileData = readLocalJsonFile("getCustomerById:" + id);
   const c = fileData.customers?.find((item) => item.id === id);
   if (!c) return null;
-  if (ownerFilter && c.owner?.trim().toLowerCase() !== ownerFilter.trim().toLowerCase()) {
-    return null;
+  if (ownerFilter && ownerFilter.trim()) {
+    const targetNorm = normalizeOwner(ownerFilter);
+    const cNorm = normalizeOwner(c.owner);
+    if (targetNorm === "belum ditugaskan") {
+      if (cNorm !== "belum ditugaskan") return null;
+    } else if (cNorm !== targetNorm) {
+      return null;
+    }
   }
   return c;
 }
@@ -636,14 +671,14 @@ export async function upsertCustomer(customer: DbCustomer): Promise<DbCustomer> 
   }
 
   // File fallback
-  const fileData = readLocalJsonFile();
+  const fileData = readLocalJsonFile("upsertCustomer:" + customer.id);
   const existingIdx = fileData.customers.findIndex((c) => c.id === customer.id);
   if (existingIdx >= 0) {
     fileData.customers[existingIdx] = customer;
   } else {
     fileData.customers.push(customer);
   }
-  writeLocalJsonFile(fileData);
+  writeLocalJsonFile(fileData, "upsertCustomer:" + customer.id);
   return customer;
 }
 
@@ -740,13 +775,13 @@ export async function upsertCustomersBatch(
   }
 
   // File fallback
-  const fileData = readLocalJsonFile();
+  const fileData = readLocalJsonFile("upsertCustomersBatch:" + customers.length);
   const map = new Map(fileData.customers.map((c) => [c.id, c]));
   for (const c of customers) {
     map.set(c.id, c);
   }
   fileData.customers = Array.from(map.values());
-  writeLocalJsonFile(fileData);
+  writeLocalJsonFile(fileData, "upsertCustomersBatch:" + customers.length);
   return { insertedOrUpdated: customers.length };
 }
 
@@ -760,11 +795,11 @@ export async function deleteCustomerById(id: string): Promise<boolean> {
     return (res.rowCount ?? 0) > 0;
   }
 
-  const fileData = readLocalJsonFile();
+  const fileData = readLocalJsonFile("deleteCustomerById:" + id);
   const prevLen = fileData.customers.length;
   fileData.customers = fileData.customers.filter((c) => c.id !== id);
   fileData.followUps = fileData.followUps.filter((f) => f.customerId !== id);
-  writeLocalJsonFile(fileData);
+  writeLocalJsonFile(fileData, "deleteCustomerById:" + id);
   return fileData.customers.length < prevLen;
 }
 
@@ -789,12 +824,12 @@ export async function deleteCustomersBatch(ids: string[]): Promise<number> {
     }
   }
 
-  const fileData = readLocalJsonFile();
+  const fileData = readLocalJsonFile("deleteCustomersBatch:" + ids.length);
   const idSet = new Set(ids);
   const prevLen = fileData.customers.length;
   fileData.customers = fileData.customers.filter((c) => !idSet.has(c.id));
   fileData.followUps = fileData.followUps.filter((f) => !idSet.has(f.customerId));
-  writeLocalJsonFile(fileData);
+  writeLocalJsonFile(fileData, "deleteCustomersBatch:" + ids.length);
   return prevLen - fileData.customers.length;
 }
 
@@ -824,7 +859,7 @@ export async function getFollowUps(customerId?: string): Promise<DbFollowUp[]> {
       console.error("[PostgreSQL] Error fetching follow-ups:", err);
     }
   }
-  const fileData = readLocalJsonFile();
+  const fileData = readLocalJsonFile("getFollowUps:" + (customerId || "all"));
   if (customerId) {
     return fileData.followUps.filter((f) => f.customerId === customerId);
   }
@@ -861,11 +896,11 @@ export async function upsertFollowUp(followUp: DbFollowUp): Promise<DbFollowUp> 
     return followUp;
   }
 
-  const fileData = readLocalJsonFile();
+  const fileData = readLocalJsonFile("upsertFollowUp:" + followUp.id);
   const idx = fileData.followUps.findIndex((f) => f.id === followUp.id);
   if (idx >= 0) fileData.followUps[idx] = followUp;
   else fileData.followUps.push(followUp);
-  writeLocalJsonFile(fileData);
+  writeLocalJsonFile(fileData, "upsertFollowUp:" + followUp.id);
   return followUp;
 }
 
@@ -875,10 +910,10 @@ export async function deleteFollowUpById(id: string): Promise<boolean> {
     const res = await client.query("DELETE FROM follow_ups WHERE id = $1", [id]);
     return (res.rowCount ?? 0) > 0;
   }
-  const fileData = readLocalJsonFile();
+  const fileData = readLocalJsonFile("deleteFollowUpById:" + id);
   const prevLen = fileData.followUps.length;
   fileData.followUps = fileData.followUps.filter((f) => f.id !== id);
-  writeLocalJsonFile(fileData);
+  writeLocalJsonFile(fileData, "deleteFollowUpById:" + id);
   return fileData.followUps.length < prevLen;
 }
 
@@ -895,7 +930,7 @@ export async function getTemplates(): Promise<DbTemplate[]> {
       /* ignore */
     }
   }
-  const fileData = readLocalJsonFile();
+  const fileData = readLocalJsonFile("getTemplates");
   return fileData.templates;
 }
 
@@ -912,11 +947,11 @@ export async function upsertTemplate(tmpl: DbTemplate): Promise<DbTemplate> {
     );
     return tmpl;
   }
-  const fileData = readLocalJsonFile();
+  const fileData = readLocalJsonFile("upsertTemplate:" + tmpl.id);
   const idx = fileData.templates.findIndex((t) => t.id === tmpl.id);
   if (idx >= 0) fileData.templates[idx] = tmpl;
   else fileData.templates.push(tmpl);
-  writeLocalJsonFile(fileData);
+  writeLocalJsonFile(fileData, "upsertTemplate:" + tmpl.id);
   return tmpl;
 }
 
@@ -926,10 +961,10 @@ export async function deleteTemplateById(id: string): Promise<boolean> {
     const res = await client.query("DELETE FROM templates WHERE id = $1", [id]);
     return (res.rowCount ?? 0) > 0;
   }
-  const fileData = readLocalJsonFile();
+  const fileData = readLocalJsonFile("deleteTemplateById:" + id);
   const prevLen = fileData.templates.length;
   fileData.templates = fileData.templates.filter((t) => t.id !== id);
-  writeLocalJsonFile(fileData);
+  writeLocalJsonFile(fileData, "deleteTemplateById:" + id);
   return fileData.templates.length < prevLen;
 }
 
@@ -954,7 +989,7 @@ export async function getNotes(): Promise<DbNote[]> {
       /* ignore */
     }
   }
-  const fileData = readLocalJsonFile();
+  const fileData = readLocalJsonFile("getNotes");
   return fileData.notes;
 }
 
@@ -980,11 +1015,11 @@ export async function upsertNote(note: DbNote): Promise<DbNote> {
     );
     return note;
   }
-  const fileData = readLocalJsonFile();
+  const fileData = readLocalJsonFile("upsertNote:" + note.id);
   const idx = fileData.notes.findIndex((n) => n.id === note.id);
   if (idx >= 0) fileData.notes[idx] = note;
   else fileData.notes.push(note);
-  writeLocalJsonFile(fileData);
+  writeLocalJsonFile(fileData, "upsertNote:" + note.id);
   return note;
 }
 
@@ -994,10 +1029,10 @@ export async function deleteNoteById(id: string): Promise<boolean> {
     const res = await client.query("DELETE FROM notes WHERE id = $1", [id]);
     return (res.rowCount ?? 0) > 0;
   }
-  const fileData = readLocalJsonFile();
+  const fileData = readLocalJsonFile("deleteNoteById:" + id);
   const prevLen = fileData.notes.length;
   fileData.notes = fileData.notes.filter((n) => n.id !== id);
-  writeLocalJsonFile(fileData);
+  writeLocalJsonFile(fileData, "deleteNoteById:" + id);
   return fileData.notes.length < prevLen;
 }
 
@@ -1024,7 +1059,7 @@ export async function getAccounts(includePassword = false): Promise<DbAccount[]>
     }
   }
 
-  const fileData = readLocalJsonFile();
+  const fileData = readLocalJsonFile("getAccounts");
   return fileData.accounts.map((acc) => {
     if (includePassword) return acc;
     const { password: _, ...rest } = acc;
@@ -1062,7 +1097,7 @@ export async function getAccountByEmail(
     }
   }
 
-  const fileData = readLocalJsonFile();
+  const fileData = readLocalJsonFile("getAccountByEmail:" + email);
   const found = fileData.accounts.find(
     (a) => a.email.trim().toLowerCase() === email.trim().toLowerCase(),
   );
@@ -1151,7 +1186,7 @@ export async function upsertAccount(
   }
 
   // File fallback
-  const fileData = readLocalJsonFile();
+  const fileData = readLocalJsonFile("upsertAccount:" + account.id);
   const existingIdx = fileData.accounts.findIndex((a) => a.id === account.id);
   const existing = existingIdx >= 0 ? fileData.accounts[existingIdx] : null;
 
@@ -1169,7 +1204,7 @@ export async function upsertAccount(
 
   if (existingIdx >= 0) fileData.accounts[existingIdx] = savedAccount;
   else fileData.accounts.push(savedAccount);
-  writeLocalJsonFile(fileData);
+  writeLocalJsonFile(fileData, "upsertAccount:" + account.id);
 
   const { password: _, ...rest } = savedAccount;
   return rest;
@@ -1181,10 +1216,10 @@ export async function deleteAccountById(id: string): Promise<boolean> {
     const res = await client.query("DELETE FROM accounts WHERE id = $1", [id]);
     return (res.rowCount ?? 0) > 0;
   }
-  const fileData = readLocalJsonFile();
+  const fileData = readLocalJsonFile("deleteAccountById:" + id);
   const prevLen = fileData.accounts.length;
   fileData.accounts = fileData.accounts.filter((a) => a.id !== id);
-  writeLocalJsonFile(fileData);
+  writeLocalJsonFile(fileData, "deleteAccountById:" + id);
   return fileData.accounts.length < prevLen;
 }
 
@@ -1248,7 +1283,10 @@ interface LocalFileShape {
   notes: DbNote[];
 }
 
-function readLocalJsonFile(): LocalFileShape {
+function readLocalJsonFile(context = "unknown"): LocalFileShape {
+  console.error(
+    `[${new Date().toISOString()}] [DB FALLBACK - READ] PostgreSQL tidak tersedia atau query gagal! Membaca dari acc_db.json. Konteks pemanggil: ${context}`,
+  );
   try {
     if (fs.existsSync(DB_FILE_PATH)) {
       const raw = fs.readFileSync(DB_FILE_PATH, "utf-8");
@@ -1262,15 +1300,18 @@ function readLocalJsonFile(): LocalFileShape {
       };
     }
   } catch (e) {
-    console.error("[Local File DB] Read error:", e);
+    console.error(`[${new Date().toISOString()}] [Local File DB] Read error:`, e);
   }
   return { customers: [], followUps: [], templates: [], accounts: [], notes: [] };
 }
 
-function writeLocalJsonFile(data: LocalFileShape): void {
+function writeLocalJsonFile(data: LocalFileShape, context = "unknown"): void {
+  console.error(
+    `[${new Date().toISOString()}] [DB FALLBACK - WRITE] PostgreSQL tidak tersedia! Menulis perubahan data ke acc_db.json! Konteks pemanggil: ${context}`,
+  );
   try {
     fs.writeFileSync(DB_FILE_PATH, JSON.stringify(data, null, 2), "utf-8");
   } catch (e) {
-    console.error("[Local File DB] Write error:", e);
+    console.error(`[${new Date().toISOString()}] [Local File DB] Write error:`, e);
   }
 }

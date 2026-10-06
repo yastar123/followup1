@@ -262,8 +262,28 @@ export default {
         // 3. Full App State (Read-only, strictly filtered by role at server level)
         if (pathname === "/api/state") {
           if (request.method === "GET") {
+            const t0 = performance.now();
             const data = await getFullState(session.role, session.name);
-            return jsonResponse(data);
+            const dbDurationMs = (performance.now() - t0).toFixed(2);
+
+            const t1 = performance.now();
+            const jsonString = JSON.stringify(data);
+            const jsonDurationMs = (performance.now() - t1).toFixed(2);
+
+            const payloadBytes = Buffer.byteLength(jsonString, "utf-8");
+            const customerCount = Array.isArray(data.customers) ? data.customers.length : 0;
+
+            console.log(
+              `[${new Date().toISOString()}] [API /api/state] Role: ${session.role} | Caller: "${session.name}" | Customers: ${customerCount} baris | DB Query: ${dbDurationMs}ms | JSON Stringify: ${jsonDurationMs}ms | Size: ${(payloadBytes / (1024 * 1024)).toFixed(2)} MB (${payloadBytes} bytes)`,
+            );
+
+            return new Response(jsonString, {
+              status: 200,
+              headers: {
+                "content-type": "application/json",
+                "cache-control": "no-store, no-cache, must-revalidate",
+              },
+            });
           }
           // Reject raw POST /api/state to prevent monolithic client state wipes
           return jsonResponse(

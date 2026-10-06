@@ -8,6 +8,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { normalizeOwner, isMatchSales } from "./utils";
 
 export type Role = "sales" | "admin";
 
@@ -854,25 +855,7 @@ export const waLink = (phone: string, message: string) =>
 export const waBusinessLink = (phone: string, message: string) =>
   `https://api.whatsapp.com/send?phone=${phone.replace(/\D/g, "")}&text=${encodeURIComponent(message)}`;
 
-export const normalizeSalesName = (name?: string | null) => {
-  if (!name) return "";
-  return name
-    .replace(/^Sales\s*[·\-\s]\s*/i, "")
-    .split("@")[0]
-    .trim()
-    .toLowerCase();
-};
+export { normalizeOwner, isMatchSales };
+export const normalizeSalesName = normalizeOwner;
 
-export const isMatchSales = (target?: string | null, salesUser?: string | null) => {
-  if (!salesUser) return true;
-  if (!target) return false;
-  if (target === salesUser) return true;
-  const cleanTarget = normalizeSalesName(target);
-  const cleanUser = normalizeSalesName(salesUser);
-  if (!cleanTarget || !cleanUser) return false;
-  return (
-    cleanTarget === cleanUser ||
-    target.toLowerCase().includes(cleanUser) ||
-    salesUser.toLowerCase().includes(cleanTarget)
-  );
-};
+
