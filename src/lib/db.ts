@@ -874,24 +874,32 @@ export async function deleteCustomerById(id: string): Promise<boolean> {
   }
 }
 
-// Explicit batch customer deletion (Admin only, limited to max 200 IDs)
+// Explicit batch customer deletion (Admin only, chunked in batches of 1000, up to 5000 IDs)
 export async function deleteCustomersBatch(ids: string[]): Promise<number> {
   if (!ids || ids.length === 0) return 0;
-  if (ids.length > 200) {
-    throw new ValidationError("Maksimal 200 customer per permintaan penghapusan.");
+  if (ids.length > 5000) {
+    throw new ValidationError("Maksimal 5000 customer per permintaan penghapusan.");
   }
 
   const client = await requirePgClient();
-  await client.query("BEGIN");
-  try {
-    await client.query("DELETE FROM follow_ups WHERE customer_id = ANY($1::text[])", [ids]);
-    const res = await client.query("DELETE FROM customers WHERE id = ANY($1::text[])", [ids]);
-    await client.query("COMMIT");
-    return res.rowCount ?? 0;
-  } catch (err) {
-    await client.query("ROLLBACK").catch(() => {});
-    handleDbError(err, "deleteCustomersBatch");
+  const CHUNK_SIZE = 1000;
+  let totalDeleted = 0;
+
+  for (let i = 0; i < ids.length; i += CHUNK_SIZE) {
+    const chunk = ids.slice(i, i + CHUNK_SIZE);
+    await client.query("BEGIN");
+    try {
+      await client.query("DELETE FROM follow_ups WHERE customer_id = ANY($1::text[])", [chunk]);
+      const res = await client.query("DELETE FROM customers WHERE id = ANY($1::text[])", [chunk]);
+      await client.query("COMMIT");
+      totalDeleted += res.rowCount ?? 0;
+    } catch (err) {
+      await client.query("ROLLBACK").catch(() => {});
+      handleDbError(err, "deleteCustomersBatch");
+    }
   }
+
+  return totalDeleted;
 }
 
 // ---------------------------------------------------------

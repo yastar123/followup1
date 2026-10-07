@@ -579,9 +579,9 @@ export default {
           if (ids.length === 0) {
             return jsonResponse({ error: "Daftar ID customer untuk dihapus kosong." }, 400);
           }
-          if (ids.length > 200) {
+          if (ids.length > 5000) {
             return jsonResponse(
-              { error: "Maksimal 200 customer per permintaan penghapusan." },
+              { error: "Maksimal 5000 customer per permintaan penghapusan." },
               400,
             );
           }

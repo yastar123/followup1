@@ -7,6 +7,7 @@ import {
   UserCheck,
   Plus,
   Pencil,
+  Eye,
   Search,
   Filter,
   MoreHorizontal,
@@ -288,6 +289,16 @@ function DataPage() {
   const [dbSales, setDbSales] = useState("");
   const [isDbAssigning, setIsDbAssigning] = useState(false);
 
+  // Range Delete State for Saved Database Customers
+  const [rangeActionTab, setRangeActionTab] = useState<"assign" | "delete">("assign");
+  const [delRangeFrom, setDelRangeFrom] = useState("1");
+  const [delRangeTo, setDelRangeTo] = useState("1000");
+  const [isDeleteRangePreviewOpen, setIsDeleteRangePreviewOpen] = useState(false);
+  const [previewSearch, setPreviewSearch] = useState("");
+  const [previewPage, setPreviewPage] = useState(1);
+  const [confirmUnderstand, setConfirmUnderstand] = useState(false);
+  const [isDeletingRange, setIsDeletingRange] = useState(false);
+
   const salesList = useMemo(
     () => accounts.filter((a) => a.role === "sales" && a.active),
     [accounts],
@@ -317,6 +328,13 @@ function DataPage() {
         }
         return prev;
       });
+      setDelRangeTo((prev) => {
+        const num = Number(prev);
+        if (isNaN(num) || num <= 0 || num > customers.length) {
+          return String(Math.min(1000, customers.length));
+        }
+        return prev;
+      });
     }
   }, [customers.length]);
 
@@ -325,6 +343,83 @@ function DataPage() {
     const b = Math.min(customers.length, Number(dbTo) || 0);
     return b >= a ? b - a + 1 : 0;
   }, [dbFrom, dbTo, customers.length]);
+
+  const delRangeCount = useMemo(() => {
+    const a = Math.max(1, Number(delRangeFrom) || 1);
+    const b = Math.min(customers.length, Number(delRangeTo) || 0);
+    return b >= a ? b - a + 1 : 0;
+  }, [delRangeFrom, delRangeTo, customers.length]);
+
+  const targetRangeCustomers = useMemo(() => {
+    const a = Math.max(1, Number(delRangeFrom) || 1);
+    const b = Math.min(customers.length, Number(delRangeTo) || 0);
+    if (b < a || !customers.length) return [];
+    return customers.slice(a - 1, b).map((c, idx) => ({
+      ...c,
+      rowNumber: a + idx,
+    }));
+  }, [delRangeFrom, delRangeTo, customers]);
+
+  const filteredPreviewCustomers = useMemo(() => {
+    if (!previewSearch.trim()) return targetRangeCustomers;
+    const q = previewSearch.toLowerCase().trim();
+    return targetRangeCustomers.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        (c.contractNumber && c.contractNumber.toLowerCase().includes(q)) ||
+        (c.phone && c.phone.includes(q)) ||
+        (c.owner && c.owner.toLowerCase().includes(q)) ||
+        (c.status && c.status.toLowerCase().includes(q)) ||
+        (c.handling && c.handling.toLowerCase().includes(q)) ||
+        (c.segment && c.segment.toLowerCase().includes(q)),
+    );
+  }, [targetRangeCustomers, previewSearch]);
+
+  const previewTotalPages = Math.ceil(filteredPreviewCustomers.length / 20) || 1;
+  const paginatedPreviewCustomers = useMemo(() => {
+    const start = (previewPage - 1) * 20;
+    return filteredPreviewCustomers.slice(start, start + 20);
+  }, [filteredPreviewCustomers, previewPage]);
+
+  const handleOpenDeleteRangePreview = () => {
+    const a = Math.max(1, Number(delRangeFrom) || 1);
+    const b = Math.min(customers.length, Number(delRangeTo) || 0);
+
+    if (!customers.length) {
+      toast.error("Tidak ada data customer di database.");
+      return;
+    }
+    if (b < a) {
+      toast.error("Rentang nomor baris tidak valid.");
+      return;
+    }
+    if (targetRangeCustomers.length === 0) {
+      toast.error("Tidak ada data customer pada rentang baris tersebut.");
+      return;
+    }
+    setPreviewSearch("");
+    setPreviewPage(1);
+    setConfirmUnderstand(false);
+    setIsDeleteRangePreviewOpen(true);
+  };
+
+  const handleConfirmDeleteRange = async () => {
+    if (!targetRangeCustomers.length) return;
+    setIsDeletingRange(true);
+    try {
+      const idsToDelete = targetRangeCustomers.map((c) => c.id);
+      const count = await deleteCustomers(idsToDelete);
+      toast.success(
+        `${count} data customer (baris ${delRangeFrom}–${delRangeTo}) berhasil dihapus permanen dari PostgreSQL!`,
+      );
+      setIsDeleteRangePreviewOpen(false);
+      setSelectedIds((prev) => prev.filter((id) => !idsToDelete.includes(id)));
+    } catch (err: unknown) {
+      toast.error((err as Error)?.message || "Gagal menghapus rentang data customer.");
+    } finally {
+      setIsDeletingRange(false);
+    }
+  };
 
   const handleAssignDbRange = async () => {
     const a = Math.max(1, Number(dbFrom) || 1);
@@ -1056,88 +1151,237 @@ function DataPage() {
             </div>
           </div>
 
-          {/* Range Assign Bar for Active PostgreSQL Database Customers */}
+          {/* Range Action Card (Bagi ke Sales & Hapus Per Rentang Baris) */}
           {customers.length > 0 ? (
-            <div className="mt-5 p-3.5 sm:p-5 rounded-xl border border-primary/20 bg-primary/5 space-y-3.5">
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div>
-                  <h3 className="text-xs sm:text-sm font-semibold text-foreground flex items-center gap-2">
-                    <UserCheck className="size-4 text-primary shrink-0" /> Bagi customer ke sales
-                    (per rentang)
-                  </h3>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Contoh: customer 1–50 ke Sales 1, 51–120 ke Sales 2. Ditugaskan:{" "}
-                    {assignedDbCount} dari {customers.length}.
-                  </p>
+            <div className="mt-5 p-3.5 sm:p-5 rounded-xl border border-border bg-card shadow-sm space-y-4">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b pb-3">
+                <div className="flex items-center gap-1.5 p-1 bg-muted rounded-lg w-fit">
+                  <button
+                    type="button"
+                    onClick={() => setRangeActionTab("assign")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
+                      rangeActionTab === "assign"
+                        ? "bg-background text-primary shadow-xs"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <UserCheck className="size-3.5" /> Bagi ke Sales (Per Rentang)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRangeActionTab("delete")}
+                    className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-semibold rounded-md transition-all ${
+                      rangeActionTab === "delete"
+                        ? "bg-destructive text-destructive-foreground shadow-xs"
+                        : "text-muted-foreground hover:text-foreground"
+                    }`}
+                  >
+                    <Trash2 className="size-3.5" /> Hapus Customer (Per Rentang Baris)
+                  </button>
                 </div>
+
                 <Badge
                   variant="outline"
-                  className="w-fit text-[11px] font-mono bg-background border-primary/30 text-primary shrink-0"
+                  className="w-fit text-[11px] font-mono bg-background border-border text-foreground shrink-0"
                 >
-                  {assignedDbCount} dari {customers.length} ditugaskan
+                  Total Database: {customers.length} Customer
                 </Badge>
               </div>
 
-              <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1.4fr_auto] items-end">
-                <div className="space-y-1.5">
-                  <Label htmlFor="dbFrom" className="text-xs font-medium">
-                    Dari nomor
-                  </Label>
-                  <Input
-                    id="dbFrom"
-                    type="number"
-                    min={1}
-                    max={customers.length}
-                    value={dbFrom}
-                    onChange={(e) => setDbFrom(e.target.value)}
-                    className="bg-background text-xs h-9"
-                  />
+              {rangeActionTab === "assign" ? (
+                <div className="space-y-3 animate-in fade-in-50">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <h3 className="text-xs sm:text-sm font-semibold text-foreground flex items-center gap-2">
+                        <UserCheck className="size-4 text-primary shrink-0" /> Bagi customer ke
+                        sales (per rentang)
+                      </h3>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Contoh: customer baris 1–50 ke Sales 1, 51–120 ke Sales 2. Ditugaskan:{" "}
+                        {assignedDbCount} dari {customers.length}.
+                      </p>
+                    </div>
+                    <Badge
+                      variant="outline"
+                      className="w-fit text-[11px] font-mono bg-primary/5 border-primary/30 text-primary shrink-0"
+                    >
+                      {assignedDbCount} dari {customers.length} ditugaskan
+                    </Badge>
+                  </div>
+
+                  <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_1.4fr_auto] items-end">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="dbFrom" className="text-xs font-medium">
+                        Dari nomor baris
+                      </Label>
+                      <Input
+                        id="dbFrom"
+                        type="number"
+                        min={1}
+                        max={customers.length}
+                        value={dbFrom}
+                        onChange={(e) => setDbFrom(e.target.value)}
+                        className="bg-background text-xs h-9"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="dbTo" className="text-xs font-medium">
+                        Sampai nomor baris
+                      </Label>
+                      <Input
+                        id="dbTo"
+                        type="number"
+                        min={1}
+                        max={customers.length}
+                        value={dbTo}
+                        onChange={(e) => setDbTo(e.target.value)}
+                        className="bg-background text-xs h-9"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-xs font-medium">Sales penanggung jawab</Label>
+                      <Select value={dbSales} onValueChange={setDbSales}>
+                        <SelectTrigger className="bg-background text-xs h-9">
+                          <SelectValue placeholder="Pilih sales" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {salesList.map((a) => {
+                            const firstName = a.name.split(" ")[0] ?? a.name;
+                            return (
+                              <SelectItem key={a.id} value={firstName}>
+                                {a.name} ({a.email})
+                              </SelectItem>
+                            );
+                          })}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <Button
+                      onClick={handleAssignDbRange}
+                      disabled={isDbAssigning}
+                      className="gap-2 text-xs font-medium shadow-sm h-9 w-full lg:w-auto justify-center"
+                    >
+                      <UserCheck className="size-4" />
+                      {isDbAssigning ? (
+                        "Menyimpan ke Database..."
+                      ) : (
+                        <>Tugaskan & Simpan ke PostgreSQL ({dbRangeCount} data)</>
+                      )}
+                    </Button>
+                  </div>
                 </div>
-                <div className="space-y-1.5">
-                  <Label htmlFor="dbTo" className="text-xs font-medium">
-                    Sampai nomor
-                  </Label>
-                  <Input
-                    id="dbTo"
-                    type="number"
-                    min={1}
-                    max={customers.length}
-                    value={dbTo}
-                    onChange={(e) => setDbTo(e.target.value)}
-                    className="bg-background text-xs h-9"
-                  />
+              ) : (
+                <div className="space-y-3 animate-in fade-in-50 bg-destructive/5 p-3 sm:p-4 rounded-lg border border-destructive/20">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                    <div>
+                      <h3 className="text-xs sm:text-sm font-semibold text-destructive flex items-center gap-2">
+                        <Trash2 className="size-4 shrink-0" /> Hapus Customer Berdasarkan Rentang
+                        Baris
+                      </h3>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        Pilih rentang baris nomor urut customer (misal: 1 hingga 1000). Anda dapat
+                        mem-preview seluruh data sebelum dihapus permanen.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <span className="text-[11px] text-muted-foreground font-medium mr-1">
+                        Preset Cepat:
+                      </span>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setDelRangeFrom("1");
+                          setDelRangeTo(String(Math.min(500, customers.length)));
+                        }}
+                        className="h-6 px-2 text-[10px]"
+                      >
+                        1–500
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setDelRangeFrom("1");
+                          setDelRangeTo(String(Math.min(1000, customers.length)));
+                        }}
+                        className="h-6 px-2 text-[10px]"
+                      >
+                        1–1000
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setDelRangeFrom("501");
+                          setDelRangeTo(String(Math.min(1000, customers.length)));
+                        }}
+                        className="h-6 px-2 text-[10px]"
+                      >
+                        501–1000
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => {
+                          setDelRangeFrom("1");
+                          setDelRangeTo(String(customers.length));
+                        }}
+                        className="h-6 px-2 text-[10px]"
+                      >
+                        Semua ({customers.length})
+                      </Button>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-3 grid-cols-1 sm:grid-cols-2 lg:grid-cols-[1fr_1fr_auto] items-end pt-1">
+                    <div className="space-y-1.5">
+                      <Label
+                        htmlFor="delRangeFrom"
+                        className="text-xs font-semibold text-foreground"
+                      >
+                        Dari nomor baris
+                      </Label>
+                      <Input
+                        id="delRangeFrom"
+                        type="number"
+                        min={1}
+                        max={customers.length}
+                        value={delRangeFrom}
+                        onChange={(e) => setDelRangeFrom(e.target.value)}
+                        className="bg-background text-xs h-9"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="delRangeTo" className="text-xs font-semibold text-foreground">
+                        Sampai nomor baris
+                      </Label>
+                      <Input
+                        id="delRangeTo"
+                        type="number"
+                        min={1}
+                        max={customers.length}
+                        value={delRangeTo}
+                        onChange={(e) => setDelRangeTo(e.target.value)}
+                        className="bg-background text-xs h-9"
+                      />
+                    </div>
+                    <Button
+                      type="button"
+                      variant="destructive"
+                      onClick={handleOpenDeleteRangePreview}
+                      className="gap-2 text-xs font-semibold shadow-sm h-9 w-full lg:w-auto justify-center"
+                    >
+                      <Eye className="size-4" />
+                      Preview & Hapus Data ({delRangeCount} Data Dipilih)
+                    </Button>
+                  </div>
                 </div>
-                <div className="space-y-1.5">
-                  <Label className="text-xs font-medium">Sales penanggung jawab</Label>
-                  <Select value={dbSales} onValueChange={setDbSales}>
-                    <SelectTrigger className="bg-background text-xs h-9">
-                      <SelectValue placeholder="Pilih sales" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {salesList.map((a) => {
-                        const firstName = a.name.split(" ")[0] ?? a.name;
-                        return (
-                          <SelectItem key={a.id} value={firstName}>
-                            {a.name} ({a.email})
-                          </SelectItem>
-                        );
-                      })}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <Button
-                  onClick={handleAssignDbRange}
-                  disabled={isDbAssigning}
-                  className="gap-2 text-xs font-medium shadow-sm h-9 w-full lg:w-auto justify-center"
-                >
-                  <UserCheck className="size-4" />
-                  {isDbAssigning ? (
-                    "Menyimpan ke Database..."
-                  ) : (
-                    <>Tugaskan & Simpan ke PostgreSQL ({dbRangeCount} data)</>
-                  )}
-                </Button>
-              </div>
+              )}
             </div>
           ) : null}
 
@@ -2086,6 +2330,246 @@ function DataPage() {
               {isSavingCustomer ? "Menyimpan..." : "Tugaskan Sales"}
             </Button>
           </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* DIALOG 5: Preview & Hapus Customer Berdasarkan Rentang Baris */}
+      <Dialog open={isDeleteRangePreviewOpen} onOpenChange={setIsDeleteRangePreviewOpen}>
+        <DialogContent className="w-[96vw] max-w-5xl max-h-[92vh] flex flex-col p-4 sm:p-6 overflow-hidden">
+          <DialogHeader className="shrink-0 space-y-1 pb-3 border-b">
+            <div className="flex items-center gap-2 text-destructive">
+              <div className="p-2 rounded-lg bg-destructive/10">
+                <Trash2 className="size-5" />
+              </div>
+              <div>
+                <DialogTitle className="text-base sm:text-lg font-bold text-destructive">
+                  Preview Hapus Customer (Rentang Baris {delRangeFrom} s/d {delRangeTo})
+                </DialogTitle>
+                <DialogDescription className="text-xs text-muted-foreground mt-0.5">
+                  Tinjau seluruh data customer di bawah ini sebelum menghapusnya secara permanen
+                  dari PostgreSQL.
+                </DialogDescription>
+              </div>
+            </div>
+          </DialogHeader>
+
+          {/* Stats & Summary Bar */}
+          <div className="shrink-0 grid grid-cols-2 sm:grid-cols-4 gap-2.5 py-3 border-b bg-muted/30 -mx-4 sm:-mx-6 px-4 sm:px-6">
+            <div className="p-2.5 rounded-lg bg-background border shadow-2xs">
+              <p className="text-[11px] text-muted-foreground font-medium">Rentang Terpilih</p>
+              <p className="text-xs sm:text-sm font-bold text-foreground">
+                Baris {delRangeFrom} – {delRangeTo}
+              </p>
+            </div>
+            <div className="p-2.5 rounded-lg bg-destructive/10 border border-destructive/20 shadow-2xs">
+              <p className="text-[11px] text-destructive font-medium">Total Akan Dihapus</p>
+              <p className="text-xs sm:text-sm font-bold text-destructive">
+                {targetRangeCustomers.length} Data Customer
+              </p>
+            </div>
+            <div className="p-2.5 rounded-lg bg-background border shadow-2xs">
+              <p className="text-[11px] text-muted-foreground font-medium">Sudah Ditugaskan</p>
+              <p className="text-xs sm:text-sm font-bold text-primary">
+                {
+                  targetRangeCustomers.filter((c) => normalizeOwner(c.owner) !== "belum ditugaskan")
+                    .length
+                }{" "}
+                Customer
+              </p>
+            </div>
+            <div className="p-2.5 rounded-lg bg-background border shadow-2xs">
+              <p className="text-[11px] text-muted-foreground font-medium">Belum Ditugaskan</p>
+              <p className="text-xs sm:text-sm font-bold text-muted-foreground">
+                {
+                  targetRangeCustomers.filter((c) => normalizeOwner(c.owner) === "belum ditugaskan")
+                    .length
+                }{" "}
+                Customer
+              </p>
+            </div>
+          </div>
+
+          {/* Search inside preview */}
+          <div className="shrink-0 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2 pt-3 pb-2">
+            <div className="relative flex-1 max-w-sm">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-3.5 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Cari dalam daftar preview..."
+                value={previewSearch}
+                onChange={(e) => {
+                  setPreviewSearch(e.target.value);
+                  setPreviewPage(1);
+                }}
+                className="pl-8 text-xs h-8"
+              />
+              {previewSearch ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPreviewSearch("");
+                    setPreviewPage(1);
+                  }}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="size-3" />
+                </button>
+              ) : null}
+            </div>
+
+            <div className="text-xs text-muted-foreground flex items-center justify-between sm:justify-end gap-2">
+              <span>
+                Menampilkan{" "}
+                <strong className="text-foreground">
+                  {filteredPreviewCustomers.length > 0 ? (previewPage - 1) * 20 + 1 : 0}–
+                  {Math.min(previewPage * 20, filteredPreviewCustomers.length)}
+                </strong>{" "}
+                dari <strong className="text-foreground">{filteredPreviewCustomers.length}</strong>{" "}
+                data preview
+              </span>
+            </div>
+          </div>
+
+          {/* Table Container */}
+          <div className="flex-1 overflow-auto rounded-lg border bg-background min-h-[220px]">
+            <table className="w-full text-xs text-left border-collapse">
+              <thead className="bg-muted/80 sticky top-0 z-10 border-b shadow-2xs backdrop-blur-xs">
+                <tr className="text-muted-foreground font-semibold">
+                  <th className="py-2.5 px-3 w-14 text-center">No. Baris</th>
+                  <th className="py-2.5 px-3">Nama Customer</th>
+                  <th className="py-2.5 px-3">No. Kontrak</th>
+                  <th className="py-2.5 px-3">No. HP</th>
+                  <th className="py-2.5 px-3">Unit / Kendaraan</th>
+                  <th className="py-2.5 px-3">Cabang / Handling</th>
+                  <th className="py-2.5 px-3">Sales PIC</th>
+                  <th className="py-2.5 px-3">Status</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {paginatedPreviewCustomers.length === 0 ? (
+                  <tr>
+                    <td colSpan={8} className="py-8 text-center text-muted-foreground">
+                      Tidak ada data customer yang sesuai dengan pencarian preview.
+                    </td>
+                  </tr>
+                ) : (
+                  paginatedPreviewCustomers.map((c) => {
+                    const isAssigned = normalizeOwner(c.owner) !== "belum ditugaskan";
+                    return (
+                      <tr key={c.id} className="hover:bg-destructive/5 transition-colors">
+                        <td className="py-2 px-3 text-center font-mono font-bold text-muted-foreground">
+                          #{c.rowNumber}
+                        </td>
+                        <td className="py-2 px-3 font-semibold text-foreground">{c.name}</td>
+                        <td className="py-2 px-3 font-mono text-[11px] text-muted-foreground">
+                          {c.contractNumber || "-"}
+                        </td>
+                        <td className="py-2 px-3 font-mono text-[11px] text-muted-foreground">
+                          {c.phone || "-"}
+                        </td>
+                        <td className="py-2 px-3 text-muted-foreground">
+                          {c.unitType || c.product || "-"} {c.year ? `(${c.year})` : ""}
+                        </td>
+                        <td className="py-2 px-3 text-muted-foreground">
+                          {c.handling || c.city || "-"}
+                        </td>
+                        <td className="py-2 px-3">
+                          <span
+                            className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium ${
+                              isAssigned
+                                ? "bg-primary/10 text-primary border border-primary/20"
+                                : "bg-muted text-muted-foreground"
+                            }`}
+                          >
+                            {c.owner || "Belum ditugaskan"}
+                          </span>
+                        </td>
+                        <td className="py-2 px-3">
+                          <Badge variant="outline" className="text-[10px] font-normal">
+                            {c.status || "Baru"}
+                          </Badge>
+                        </td>
+                      </tr>
+                    );
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
+
+          {/* Pagination inside preview */}
+          {previewTotalPages > 1 && (
+            <div className="shrink-0 flex items-center justify-between pt-2.5 pb-1 border-t text-xs">
+              <span className="text-muted-foreground">
+                Halaman {previewPage} dari {previewTotalPages}
+              </span>
+              <div className="flex items-center gap-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={previewPage <= 1}
+                  onClick={() => setPreviewPage((p) => Math.max(1, p - 1))}
+                  className="h-7 px-2 text-xs"
+                >
+                  <ChevronLeft className="size-3.5 mr-1" /> Sebelumnya
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  disabled={previewPage >= previewTotalPages}
+                  onClick={() => setPreviewPage((p) => Math.min(previewTotalPages, p + 1))}
+                  className="h-7 px-2 text-xs"
+                >
+                  Selanjutnya <ChevronRight className="size-3.5 ml-1" />
+                </Button>
+              </div>
+            </div>
+          )}
+
+          {/* Safeguard Checkbox & Action Footer */}
+          <div className="shrink-0 pt-3 border-t space-y-3 bg-destructive/5 -mx-4 sm:-mx-6 -mb-4 sm:-mb-6 p-4 sm:p-6 rounded-b-lg border-destructive/20">
+            <label className="flex items-start gap-2.5 cursor-pointer select-none">
+              <Checkbox
+                checked={confirmUnderstand}
+                onCheckedChange={(checked) => setConfirmUnderstand(!!checked)}
+                className="mt-0.5 border-destructive/40 data-[state=checked]:bg-destructive data-[state=checked]:text-destructive-foreground"
+              />
+              <span className="text-xs text-foreground font-medium leading-tight">
+                Saya telah memeriksa preview di atas dan menyetujui penghapusan permanen{" "}
+                <strong className="text-destructive font-bold">
+                  {targetRangeCustomers.length} data customer
+                </strong>{" "}
+                (nomor baris {delRangeFrom} s/d {delRangeTo}) dari database PostgreSQL.
+              </span>
+            </label>
+
+            <DialogFooter className="flex flex-col-reverse sm:flex-row gap-2 pt-1">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsDeleteRangePreviewOpen(false)}
+                disabled={isDeletingRange}
+                className="w-full sm:w-auto"
+              >
+                Batal
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                onClick={handleConfirmDeleteRange}
+                disabled={
+                  isDeletingRange || !confirmUnderstand || targetRangeCustomers.length === 0
+                }
+                className="w-full sm:w-auto gap-2 font-bold shadow-md"
+              >
+                <Trash2 className="size-4" />
+                {isDeletingRange
+                  ? "Menghapus dari PostgreSQL..."
+                  : `Ya, Hapus Permanen ${targetRangeCustomers.length} Data Customer`}
+              </Button>
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
     </AppShell>
