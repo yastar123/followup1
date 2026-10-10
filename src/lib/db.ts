@@ -1,7 +1,7 @@
 import { Client } from "pg";
 import bcrypt from "bcryptjs";
 export { normalizeOwner } from "./utils";
-import { normalizeOwner } from "./utils";
+import { normalizeOwner, isMatchSales } from "./utils";
 
 export interface DbCustomer {
   id: string;
@@ -56,6 +56,8 @@ export interface DbAccount {
   phone?: string;
   note?: string;
   createdAt?: string;
+  assignedTemplateIds?: string[];
+  defaultTemplateId?: string;
 }
 
 export type DbAccountPublic = Omit<DbAccount, "password">;
@@ -450,6 +452,19 @@ export async function initPgTables() {
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
+    // Ensure template broadcast columns exist on accounts
+    const alterAccountCols = [
+      "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS assigned_template_ids TEXT DEFAULT ''",
+      "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS default_template_id TEXT DEFAULT ''",
+    ];
+    for (const sql of alterAccountCols) {
+      try {
+        await pgClient.query(sql);
+      } catch {
+        /* ignore */
+      }
+    }
 
     // 5. Create sessions table for secure server-side sessions
     await pgClient.query(`
@@ -1150,18 +1165,49 @@ export async function deleteNoteById(id: string): Promise<boolean> {
 // ---------------------------------------------------------
 // ACCOUNTS & AUTHENTICATION (SECURE WITH HASHING)
 // ---------------------------------------------------------
+async function ensureAccountTemplateColumns(client: Client): Promise<void> {
+  try {
+    await client.query(
+      "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS assigned_template_ids TEXT DEFAULT ''",
+    );
+    await client.query(
+      "ALTER TABLE accounts ADD COLUMN IF NOT EXISTS default_template_id TEXT DEFAULT ''",
+    );
+  } catch {
+    /* ignore */
+  }
+}
+
+function parseAssignedTemplateIds(raw: unknown): string[] {
+  if (!raw) return [];
+  if (Array.isArray(raw)) return raw;
+  try {
+    const parsed = JSON.parse(String(raw));
+    if (Array.isArray(parsed)) return parsed;
+  } catch {
+    return String(raw)
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+  }
+  return [];
+}
+
 export async function getAccounts(includePassword = false): Promise<DbAccount[]> {
   const client = await requirePgClient();
   try {
     const res = await client.query(`
-      SELECT id, name, email, role, active, phone, note, created_at as "createdAt"${
-        includePassword ? ", password" : ""
-      }
+      SELECT id, name, email, role, active, phone, note,
+             assigned_template_ids as "assignedTemplateIdsRaw",
+             default_template_id as "defaultTemplateId",
+             created_at as "createdAt"${includePassword ? ", password" : ""}
       FROM accounts
       ORDER BY created_at ASC
     `);
     return res.rows.map((r) => ({
       ...r,
+      assignedTemplateIds: parseAssignedTemplateIds(r.assignedTemplateIdsRaw),
+      defaultTemplateId: r.defaultTemplateId || "",
       createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : new Date().toISOString(),
     }));
   } catch (err) {
@@ -1177,9 +1223,10 @@ export async function getAccountByEmail(
   const client = await requirePgClient();
   try {
     const res = await client.query(
-      `SELECT id, name, email, role, active, phone, note, created_at as "createdAt"${
-        includePassword ? ", password" : ""
-      }
+      `SELECT id, name, email, role, active, phone, note,
+              assigned_template_ids as "assignedTemplateIdsRaw",
+              default_template_id as "defaultTemplateId",
+              created_at as "createdAt"${includePassword ? ", password" : ""}
        FROM accounts
        WHERE LOWER(email) = LOWER($1)
        LIMIT 1`,
@@ -1189,6 +1236,8 @@ export async function getAccountByEmail(
       const r = res.rows[0];
       return {
         ...r,
+        assignedTemplateIds: parseAssignedTemplateIds(r.assignedTemplateIdsRaw),
+        defaultTemplateId: r.defaultTemplateId || "",
         createdAt: r.createdAt ? new Date(r.createdAt).toISOString() : new Date().toISOString(),
       };
     }
@@ -1213,11 +1262,19 @@ export async function upsertAccount(
   }
 
   const client = await requirePgClient();
+  await ensureAccountTemplateColumns(client);
+  const assignedRaw =
+    account.assignedTemplateIds !== undefined
+      ? JSON.stringify(account.assignedTemplateIds || [])
+      : null;
+  const defaultTmpl =
+    account.defaultTemplateId !== undefined ? account.defaultTemplateId || "" : null;
+
   try {
     if (finalPasswordHash) {
       await client.query(
-        `INSERT INTO accounts (id, name, email, role, active, password, phone, note, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+        `INSERT INTO accounts (id, name, email, role, active, password, phone, note, assigned_template_ids, default_template_id, created_at)
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, COALESCE($9, ''), COALESCE($10, ''), $11)
          ON CONFLICT (id) DO UPDATE SET
            name = EXCLUDED.name,
            email = EXCLUDED.email,
@@ -1225,7 +1282,9 @@ export async function upsertAccount(
            active = EXCLUDED.active,
            password = EXCLUDED.password,
            phone = EXCLUDED.phone,
-           note = EXCLUDED.note`,
+           note = EXCLUDED.note,
+           assigned_template_ids = CASE WHEN $9::text IS NOT NULL THEN $9::text ELSE accounts.assigned_template_ids END,
+           default_template_id = CASE WHEN $10::text IS NOT NULL THEN $10::text ELSE accounts.default_template_id END`,
         [
           account.id,
           account.name,
@@ -1235,6 +1294,8 @@ export async function upsertAccount(
           finalPasswordHash,
           account.phone || "",
           account.note || "",
+          assignedRaw,
+          defaultTmpl,
           account.createdAt || new Date().toISOString(),
         ],
       );
@@ -1247,7 +1308,9 @@ export async function upsertAccount(
            role = $4,
            active = $5,
            phone = $6,
-           note = $7
+           note = $7,
+           assigned_template_ids = CASE WHEN $8::text IS NOT NULL THEN $8::text ELSE accounts.assigned_template_ids END,
+           default_template_id = CASE WHEN $9::text IS NOT NULL THEN $9::text ELSE accounts.default_template_id END
          WHERE id = $1`,
         [
           account.id,
@@ -1257,6 +1320,8 @@ export async function upsertAccount(
           account.active ?? true,
           account.phone || "",
           account.note || "",
+          assignedRaw,
+          defaultTmpl,
         ],
       );
     }
@@ -1269,10 +1334,53 @@ export async function upsertAccount(
       active: account.active ?? true,
       phone: account.phone || "",
       note: account.note || "",
+      assignedTemplateIds: account.assignedTemplateIds || [],
+      defaultTemplateId: account.defaultTemplateId || "",
       createdAt: account.createdAt || new Date().toISOString(),
     };
   } catch (err) {
     handleDbError(err, "upsertAccount");
+  }
+}
+
+export async function updateSalesBroadcastTemplates(
+  accountId: string,
+  assignedTemplateIds: string[],
+  defaultTemplateId?: string,
+): Promise<boolean> {
+  const client = await requirePgClient();
+  await ensureAccountTemplateColumns(client);
+  try {
+    const rawIds = JSON.stringify(assignedTemplateIds || []);
+    const res = await client.query(
+      `UPDATE accounts 
+       SET assigned_template_ids = $2, default_template_id = $3 
+       WHERE id = $1`,
+      [accountId, rawIds, defaultTemplateId || ""],
+    );
+    return (res.rowCount ?? 0) > 0;
+  } catch (err) {
+    handleDbError(err, "updateSalesBroadcastTemplates");
+  }
+}
+
+export async function updateAllSalesBroadcastTemplates(
+  assignedTemplateIds: string[],
+  defaultTemplateId?: string,
+): Promise<boolean> {
+  const client = await requirePgClient();
+  await ensureAccountTemplateColumns(client);
+  try {
+    const rawIds = JSON.stringify(assignedTemplateIds || []);
+    await client.query(
+      `UPDATE accounts 
+       SET assigned_template_ids = $1, default_template_id = $2 
+       WHERE role = 'sales'`,
+      [rawIds, defaultTemplateId || ""],
+    );
+    return true;
+  } catch (err) {
+    handleDbError(err, "updateAllSalesBroadcastTemplates");
   }
 }
 
@@ -1301,6 +1409,7 @@ export type FullAppState = {
 export async function getFullState(
   userRole: "admin" | "sales",
   userName?: string,
+  accountId?: string,
 ): Promise<FullAppState> {
   const isSales = userRole === "sales";
   const ownerFilter = isSales ? userName : undefined;
@@ -1312,7 +1421,15 @@ export async function getFullState(
   const followUps = await getFollowUps(undefined, ownerFilter);
   const templates = await getTemplates();
   const notes = await getNotes(ownerFilter);
-  const accounts = isSales ? [] : ((await getAccounts(false)) as DbAccountPublic[]);
+  const allAccounts = (await getAccounts(false)) as DbAccountPublic[];
+  const accounts = isSales
+    ? allAccounts.filter(
+        (a) =>
+          (accountId && a.id === accountId) ||
+          isMatchSales(a.name, userName) ||
+          normalizeOwner(a.name) === normalizeOwner(userName || ""),
+      )
+    : allAccounts;
 
   return {
     customers,

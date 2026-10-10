@@ -142,11 +142,11 @@ type Ctx = State & {
     accountId: string,
     assignedTemplateIds: string[],
     defaultTemplateId?: string,
-  ) => void;
+  ) => Promise<boolean>;
   setAllSalesBroadcastTemplates: (
     assignedTemplateIds: string[],
     defaultTemplateId?: string,
-  ) => void;
+  ) => Promise<boolean>;
   addNote: (n: { title: string; body: string }) => Promise<boolean>;
   updateNote: (id: string, patch: { title: string; body: string }) => Promise<boolean>;
   removeNote: (id: string) => Promise<boolean>;
@@ -600,6 +600,90 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [updateAccount],
   );
 
+  const setSalesBroadcastTemplates = useCallback(
+    async (
+      accountId: string,
+      assignedTemplateIds: string[],
+      defaultTemplateId?: string,
+    ): Promise<boolean> => {
+      try {
+        const res = await fetch("/api/accounts/broadcast-templates", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            accountId,
+            assignedTemplateIds,
+            defaultTemplateId,
+          }),
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData?.error || "Gagal menyimpan pengaturan broadcast");
+        }
+        setState((s) => ({
+          ...s,
+          accounts: s.accounts.map((a) =>
+            a.id === accountId
+              ? {
+                  ...a,
+                  assignedTemplateIds,
+                  defaultTemplateId:
+                    defaultTemplateId || assignedTemplateIds[0] || a.defaultTemplateId,
+                }
+              : a,
+          ),
+        }));
+        return true;
+      } catch (e) {
+        console.error(e);
+        throw e;
+      }
+    },
+    [],
+  );
+
+  const setAllSalesBroadcastTemplates = useCallback(
+    async (assignedTemplateIds: string[], defaultTemplateId?: string): Promise<boolean> => {
+      try {
+        const res = await fetch("/api/accounts/broadcast-templates", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          credentials: "include",
+          body: JSON.stringify({
+            accountId: "all",
+            assignedTemplateIds,
+            defaultTemplateId,
+          }),
+        });
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(
+            errData?.error || "Gagal menerapkan pengaturan template ke seluruh sales",
+          );
+        }
+        setState((s) => ({
+          ...s,
+          accounts: s.accounts.map((a) =>
+            a.role === "sales"
+              ? {
+                  ...a,
+                  assignedTemplateIds,
+                  defaultTemplateId:
+                    defaultTemplateId || assignedTemplateIds[0] || a.defaultTemplateId,
+                }
+              : a,
+          ),
+        }));
+        return true;
+      } catch (e) {
+        console.error(e);
+        throw e;
+      }
+    },
+    [],
+  );
+
   // Notes
   const addNote = useCallback(async (n: { title: string; body: string }): Promise<boolean> => {
     const fullNote: Note = {
@@ -706,34 +790,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       updateAccount,
       removeAccount,
       toggleAccount,
-      setSalesBroadcastTemplates: (accountId, assignedTemplateIds, defaultTemplateId) =>
-        setState((s) => ({
-          ...s,
-          accounts: s.accounts.map((a) =>
-            a.id === accountId
-              ? {
-                  ...a,
-                  assignedTemplateIds,
-                  defaultTemplateId:
-                    defaultTemplateId || assignedTemplateIds[0] || a.defaultTemplateId,
-                }
-              : a,
-          ),
-        })),
-      setAllSalesBroadcastTemplates: (assignedTemplateIds, defaultTemplateId) =>
-        setState((s) => ({
-          ...s,
-          accounts: s.accounts.map((a) =>
-            a.role === "sales"
-              ? {
-                  ...a,
-                  assignedTemplateIds,
-                  defaultTemplateId:
-                    defaultTemplateId || assignedTemplateIds[0] || a.defaultTemplateId,
-                }
-              : a,
-          ),
-        })),
+      setSalesBroadcastTemplates,
+      setAllSalesBroadcastTemplates,
       setSheetUrl: (sheetUrl) => setState((s) => ({ ...s, sheetUrl })),
       addNote,
       updateNote,
@@ -757,6 +815,8 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       updateAccount,
       removeAccount,
       toggleAccount,
+      setSalesBroadcastTemplates,
+      setAllSalesBroadcastTemplates,
       addNote,
       updateNote,
       removeNote,

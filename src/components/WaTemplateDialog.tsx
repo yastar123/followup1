@@ -10,7 +10,14 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { markPendingFollowUp } from "@/components/PendingFollowUpWatcher";
-import { renderTemplate, useStore, waLink, waBusinessLink, type Customer } from "@/lib/store";
+import {
+  renderTemplate,
+  useStore,
+  waLink,
+  waBusinessLink,
+  isMatchSales,
+  type Customer,
+} from "@/lib/store";
 
 export function WaTemplateDialog({
   customer,
@@ -30,6 +37,7 @@ export function WaTemplateDialog({
     return (
       accounts.find(
         (a) =>
+          isMatchSales(a.name, user) ||
           a.name === user ||
           user === `Sales · ${a.name.split(" ")[0]}` ||
           user.toLowerCase().includes(a.name.toLowerCase()) ||

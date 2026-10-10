@@ -28,6 +28,8 @@ import {
   getAccountByEmail,
   upsertAccount,
   deleteAccountById,
+  updateSalesBroadcastTemplates,
+  updateAllSalesBroadcastTemplates,
   DatabaseUnavailableError,
   ConflictError,
   ValidationError,
@@ -419,7 +421,7 @@ export default {
         if (pathname === "/api/state") {
           if (request.method === "GET") {
             const t0 = performance.now();
-            const data = await getFullState(session.role, session.name);
+            const data = await getFullState(session.role, session.name, session.accountId);
             const dbDurationMs = (performance.now() - t0).toFixed(2);
 
             const t1 = performance.now();
@@ -766,7 +768,50 @@ export default {
           return jsonResponse({ success });
         }
 
-        // 11. Accounts API (Admin Only)
+        // 11. Broadcast Templates for Sales (Admin Only)
+        if (pathname === "/api/accounts/broadcast-templates" && request.method === "POST") {
+          if (session.role !== "admin") {
+            return jsonResponse(
+              { error: "Hanya Admin yang dapat mengatur template broadcast." },
+              403,
+            );
+          }
+          const body = await request.json();
+          const { accountId, assignedTemplateIds, defaultTemplateId } = body;
+
+          if (!Array.isArray(assignedTemplateIds)) {
+            return jsonResponse(
+              { error: "assignedTemplateIds harus berupa array ID template." },
+              400,
+            );
+          }
+
+          if (accountId === "all") {
+            await updateAllSalesBroadcastTemplates(assignedTemplateIds, defaultTemplateId || "");
+            return jsonResponse({
+              success: true,
+              message: "Template broadcast berhasil diterapkan ke seluruh sales.",
+            });
+          } else {
+            if (!accountId || typeof accountId !== "string") {
+              return jsonResponse({ error: "ID Akun tidak valid." }, 400);
+            }
+            const success = await updateSalesBroadcastTemplates(
+              accountId,
+              assignedTemplateIds,
+              defaultTemplateId || "",
+            );
+            if (!success) {
+              return jsonResponse({ error: "Akun sales tidak ditemukan." }, 404);
+            }
+            return jsonResponse({
+              success: true,
+              message: "Template broadcast untuk sales berhasil diperbarui.",
+            });
+          }
+        }
+
+        // 12. Accounts API (Admin Only)
         if (pathname === "/api/accounts") {
           if (session.role !== "admin") {
             return jsonResponse({ error: "Hanya Admin yang dapat mengelola akun pengguna." }, 403);

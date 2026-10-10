@@ -112,6 +112,7 @@ function PengaturanBroadcastPage() {
   // Global apply batch state
   const [batchTemplateId, setBatchTemplateId] = useState<string>(templates[0]?.id || "");
   const [isApplyingBatch, setIsApplyingBatch] = useState(false);
+  const [savingAccountId, setSavingAccountId] = useState<string | null>(null);
 
   // Preview Dialog State
   const [previewData, setPreviewData] = useState<{
@@ -209,16 +210,25 @@ function PengaturanBroadcastPage() {
 
   const handleSaveSalesConfig = async (account: Account) => {
     const config = getSalesConfig(account);
-    setSalesBroadcastTemplates(account.id, config.templateIds, config.defaultId);
+    setSavingAccountId(account.id);
+    try {
+      await setSalesBroadcastTemplates(account.id, config.templateIds, config.defaultId);
 
-    // Clean from draft
-    setDrafts((prev) => {
-      const next = { ...prev };
-      delete next[account.id];
-      return next;
-    });
+      // Clean from draft
+      setDrafts((prev) => {
+        const next = { ...prev };
+        delete next[account.id];
+        return next;
+      });
 
-    toast.success(`Pengaturan broadcast untuk ${account.name} berhasil disimpan.`);
+      toast.success(`Pengaturan broadcast untuk ${account.name} berhasil disimpan.`);
+    } catch (err) {
+      toast.error(
+        (err as Error)?.message || `Gagal menyimpan pengaturan broadcast untuk ${account.name}.`,
+      );
+    } finally {
+      setSavingAccountId(null);
+    }
   };
 
   const handleApplyBatchToAll = async () => {
@@ -230,24 +240,28 @@ function PengaturanBroadcastPage() {
     try {
       // Set all sales to have this default template while retaining or giving all templates
       const allIds = templates.map((t) => t.id);
-      setAllSalesBroadcastTemplates(allIds, batchTemplateId);
+      await setAllSalesBroadcastTemplates(allIds, batchTemplateId);
       setDrafts({});
       const targetTemplate = templates.find((t) => t.id === batchTemplateId);
       toast.success(
         `Template "${targetTemplate?.name || "Pilihan"}" berhasil diterapkan ke seluruh tim sales!`,
       );
-    } catch {
-      toast.error("Gagal menerapkan template serentak.");
+    } catch (err) {
+      toast.error((err as Error)?.message || "Gagal menerapkan template serentak.");
     } finally {
       setIsApplyingBatch(false);
     }
   };
 
   const handleResetAllToFullAccess = async () => {
-    const allIds = templates.map((t) => t.id);
-    setAllSalesBroadcastTemplates(allIds, allIds[0]);
-    setDrafts({});
-    toast.success("Semua sales telah diatur untuk dapat menggunakan seluruh template.");
+    try {
+      const allIds = templates.map((t) => t.id);
+      await setAllSalesBroadcastTemplates(allIds, allIds[0] || "");
+      setDrafts({});
+      toast.success("Semua sales telah diatur untuk dapat menggunakan seluruh template.");
+    } catch (err) {
+      toast.error((err as Error)?.message || "Gagal mereset pengaturan broadcast.");
+    }
   };
 
   const handleTestAsSales = (account: Account) => {
@@ -622,14 +636,14 @@ function PengaturanBroadcastPage() {
                       </div>
                       <Button
                         size="sm"
-                        disabled={!hasDraftChanges}
+                        disabled={!hasDraftChanges || savingAccountId === account.id}
                         onClick={() => handleSaveSalesConfig(account)}
                         className={`text-xs h-8 px-3 font-semibold gap-1.5 ${
                           hasDraftChanges ? "shadow-sm" : "opacity-60"
                         }`}
                       >
                         <Save className="size-3.5" />
-                        Simpan Pengaturan
+                        {savingAccountId === account.id ? "Menyimpan..." : "Simpan Pengaturan"}
                       </Button>
                     </div>
                   </div>

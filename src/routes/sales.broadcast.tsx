@@ -67,6 +67,7 @@ function BroadcastPage() {
     return (
       accounts.find(
         (a) =>
+          isMatchSales(a.name, user) ||
           a.name === user ||
           user === `Sales · ${a.name.split(" ")[0]}` ||
           user.toLowerCase().includes(a.name.toLowerCase()) ||
