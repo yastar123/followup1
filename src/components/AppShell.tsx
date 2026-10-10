@@ -68,10 +68,20 @@ export function AppShell({
   actions?: ReactNode;
   children: ReactNode;
 }) {
-  const { user, role: userRole, logout, dbStatus, impersonating, stopImpersonate } = useStore();
+  const {
+    user,
+    role: userRole,
+    logout,
+    dbStatus,
+    impersonating,
+    stopImpersonate,
+    isLoaded,
+    isLoading,
+  } = useStore();
   const pathname = useRouterState({ select: (s) => s.location.pathname });
 
   // Route Guard: Cegah pengguna dengan role sales mengakses halaman admin
+  if (!isLoaded && isLoading) return null;
   if (role === "admin" && userRole !== "admin" && !impersonating) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background px-4">
